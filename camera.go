@@ -45,6 +45,10 @@ func (c *Camera) LookAt(eye, look, up glam.Vec3) {
 	c.view = &lookMat
 }
 
+func (c *Camera) SetView(position, forward, up glam.Vec3) {
+	c.LookAt(position, position.Plus(forward), up)
+}
+
 // Set the name of the Model matrix used in the vertex shader
 func(c *Camera) SetMName(name string) {
 	c.mName = name

@@ -22,18 +22,21 @@ func toByte(s string) byte {
 func toInts(s string) [3]int {
 	vals := strings.Split(s, "/")
 	var ints [3]int
-	for i, val := range(vals) {
-		intVal, _ := strconv.Atoi(val)
-		ints[i] = intVal
+	if len(vals) == 1 {
+		intVal, _ := strconv.Atoi(vals[0])
+		ints[0] = intVal
+		ints[1] = 1
+		ints[2] = intVal
+	} else {
+		for i, val := range(vals) {
+			intVal, _ := strconv.Atoi(val)
+			ints[i] = intVal
+		}
 	}
 	return ints
 }
 
-// Loads a shitty semi-.obj file format.
-// See http://www.martinreddy.net/gfx/3d/OBJ.spec for actual spec
-// See http://www.opengl-tutorial.org/beginners-tutorials/tutorial-7-model-loading/
-// 		for fake spec.
-func LoadModel(filePath string) Model{
+func makePolygons(filePath string) []Polygon {
 	contents, _ := ioutil.ReadFile(filePath)
 	file := string(contents)
 	lines := strings.Split(file, "\n")
@@ -74,5 +77,17 @@ func LoadModel(filePath string) Model{
 		}
 	}
 
-	return MakeModel(polygons)
+	return polygons
+}
+
+// Loads a shitty semi-.obj file format.
+// See http://www.martinreddy.net/gfx/3d/OBJ.spec for actual spec
+// See http://www.opengl-tutorial.org/beginners-tutorials/tutorial-7-model-loading/
+// 		for fake spec.
+func LoadModel(filePath string) Model {
+	return MakeModel(makePolygons(filePath))
+}
+
+func LoadScaledModel(filePath string, scale float32) Model {
+	return MakeScaledModel(makePolygons(filePath), scale)
 }

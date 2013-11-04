@@ -54,6 +54,21 @@ func MakeModel(polygons []Polygon) Model {
 	return model
 }
 
+func MakeScaledModel(polygons []Polygon, scale float32) Model {
+	for i := 0; i < len(polygons); i++ {
+		for j := 0; j < len(polygons[i].Vertices); j++ {
+			polygons[i].Vertices[j].P = polygons[i].Vertices[j].P.Scale(scale)
+		}
+	}
+
+	// for _, poly := range(polygons) {
+	// 	for _, vert := range(poly.Vertices) {
+	// 		vert.P = vert.P.Scale(scale)
+	// 	}
+	// }
+	return MakeModel(polygons)
+}
+
 func (m *Model) Draw() {
 	if currentLoadedModel != m.uid {
 		vertexAttrib.EnableArray()
