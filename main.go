@@ -61,7 +61,7 @@ func main() {
 	// cylinder := LoadModel("voxelRes/models/cylinder.obj")
 	// suzy := LoadModel("voxelRes/models/suzy.obj")
 	// torus := LoadModel("voxelRes/models/torus.obj")
-	// teapot := LoadScaledModel("voxelRes/models/teapot.obj", .03)
+	teapot := LoadScaledModel("voxelRes/models/teapot.obj", .03)
 	// scene := LoadScaledModel("voxelRes/models/car.obj", .2)
 	scene := LoadModel("voxelRes/models/whatever.obj")
 	
@@ -127,17 +127,8 @@ func main() {
 		rotVal := float64(float32(ticks) / 50)
 		shader.GetUniformLocation("lightPos").Uniform3f(
 			float32(3 * math.Cos(rotVal)), 1, float32(3 * math.Sin(rotVal)))
-
-		// shader.GetUniformLocation("lightPos").Uniform3f(0, 3, 10)
-
-		// var camRad float64 = 5
-
-		// camera.LookAt(
-		//     glam.Vec3{float32(camRad * math.Cos(rotVal / 5)),-3 + float32(ticks) * .005 , float32(camRad * math.Sin(rotVal / 5))}, // Eye
-		//     glam.Vec3{0,0,0}, // Look
-		//     glam.Vec3{0,1,0}) // Up
-
-		camera.LookAt(cameraPosition, cameraPosition.Plus(forwardDirection), upDirection)
+		
+		camera.SetView(cameraPosition, forwardDirection, upDirection)
 
 		scale := ScaleBy(.3)
 		scale = scale.Rotate(.005 * float32(ticks), glam.Vec3{1.0, 1.0, 0}.Normalized())
@@ -145,36 +136,8 @@ func main() {
 		camera.Prepare(shader, MakeTransform())
 		scene.Draw()
 
-		// num := 5
-
-		// for x := -num; x <= num; x++ {
-		// 	for y := -num; y <= num; y++ {
-		// 		for z := -num; z <= num; z++ {
-		// 			if (x * y + y * z + z * x) % 3 == 0 {
-		// 				newScale := float32(num) / (float32(math.Abs(float64(x * y * z / num))) + float32(num))
-		// 				model := scale.Scale(glam.Vec3{newScale, newScale, newScale})
-		// 				model = model.Translate(glam.Vec3{float32(x),float32(y),float32(z)})
-		// 				camera.Prepare(shader, model)
-		// 				// DrawCube()
-		// 				if (x == 0 && y == 0 && z == 0) {
-		// 					car.Draw()
-		// 				} else if x % 2 == 0 {
-		// 					if y % 2 == 0 {
-		// 						cylinder.Draw()
-		// 					} else {
-		// 						teapot.Draw()
-		// 					}
-		// 				} else if y % 2 == 0{
-		// 					suzy.Draw()
-		// 				} else {
-		// 					torus.Draw()
-		// 				}
-		// 			}
-		// 		}
-		// 	}
-		// }
-
-		// DisableCubeRendering()
+		camera.Prepare(shader, Translate(glam.Vec3{5, 1.2, -4}))
+		teapot.Draw()
 
 		sdl.GL_SwapBuffers()
 	}
