@@ -60,9 +60,9 @@ func(c *Camera) SetVPName(name string) {
 }
 
 // Prepares to draw an object that has undergone the given model transformation
-func (c *Camera) Prepare(shader gl.Program, model Transform) {
+func (c *Camera) Prepare(shader gl.Program, model *Transform) {
 	shader.GetUniformLocation(c.mName).UniformMatrix4fv(
-		 					false, MatToSlice(&model.TransformMat))
+		 					false, MatToSlice(&((*model).TransformMat)))
 	shader.GetUniformLocation(c.vpName).UniformMatrix4fv(
 		 					false, *c.ToVP())
 }

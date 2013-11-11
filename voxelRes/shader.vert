@@ -9,10 +9,14 @@ uniform mat4 VP;
 
 uniform vec3 lightPos;
 
+uniform vec3 cameraPos;
+
 out vec3 normal;
 out float lightLevel;
 out vec3 lightDir;
 out vec3 inColor;
+
+smooth out vec3 isEdge;
 
 void main() {
 	vec4 v = vec4(vertexPosition_modelspace, 1);
@@ -27,4 +31,10 @@ void main() {
 	lightLevel = clamp(100 / (length(lightDir) * length(lightDir)), 0, 1);
 
 	inColor = vertexColor;
+
+	float normalLevel = length(cross(normal, normalize(cameraPos - worldV.xyz)));
+	if (normalLevel > .99)
+		isEdge = vec3(1.0f, 0, 0);
+	else
+		isEdge = vec3(0.0f, 0, 0);
 }

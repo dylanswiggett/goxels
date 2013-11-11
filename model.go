@@ -20,6 +20,7 @@ func DisableModelRendering() {
 	vertexAttrib.DisableArray()
 	colorAttrib.DisableArray()
 	normalAttrib.DisableArray()
+	currentLoadedModel = -1
 }
 
 type Color struct {

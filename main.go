@@ -16,7 +16,7 @@ var camera *Camera
 var cameraPosition, forwardDirection, rightDirection, upDirection glam.Vec3
 
 func InitGL() {
-	gl.ClearColor(0, 0, 0.1, 0)
+	gl.ClearColor(1, 1, 1, 0)
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LESS)
 	gl.Enable(gl.LINE_SMOOTH)
@@ -58,12 +58,12 @@ func main() {
 	rightDirection = glam.Vec3{0, 0, 1}
 	upDirection = glam.Vec3{0, 1, 0}
 
-	// cylinder := LoadModel("voxelRes/models/cylinder.obj")
+	cylinder := LoadModel("voxelRes/models/highres.obj")
 	// suzy := LoadModel("voxelRes/models/suzy.obj")
 	// torus := LoadModel("voxelRes/models/torus.obj")
-	teapot := LoadScaledModel("voxelRes/models/teapot.obj", .03)
+	// teapot := LoadScaledModel("voxelRes/models/car.obj", .03)
 	// scene := LoadScaledModel("voxelRes/models/car.obj", .2)
-	scene := LoadModel("voxelRes/models/whatever.obj")
+	// scene := LoadModel("voxelRes/models/whatever.obj")
 	
 	/* HANDLE OPENGL RENDERING */
 
@@ -126,18 +126,18 @@ func main() {
 
 		rotVal := float64(float32(ticks) / 50)
 		shader.GetUniformLocation("lightPos").Uniform3f(
-			float32(3 * math.Cos(rotVal)), 1, float32(3 * math.Sin(rotVal)))
+			float32(3 * math.Cos(rotVal * .9 + 1)), 1, float32(3 * math.Sin(rotVal * .9 + 1)))
+		// shader.GetUniformLocation("lightPos").Uniform3f(3, 1, 3)
+		shader.GetUniformLocation("cameraPos").Uniform3f(cameraPosition.X, cameraPosition.Y, cameraPosition.Z);
 		
 		camera.SetView(cameraPosition, forwardDirection, upDirection)
 
-		scale := ScaleBy(.3)
-		scale = scale.Rotate(.005 * float32(ticks), glam.Vec3{1.0, 1.0, 0}.Normalized())
+		camera.Prepare(shader, Rotate(float32(rotVal), glam.Vec3{0, 1, 0}))
+		// scene.Draw()
+		cylinder.Draw()
 
-		camera.Prepare(shader, MakeTransform())
-		scene.Draw()
-
-		camera.Prepare(shader, Translate(glam.Vec3{5, 1.2, -4}))
-		teapot.Draw()
+		camera.Prepare(shader, Rotate(float32(rotVal), glam.Vec3{0, 1, 0}).Translate(glam.Vec3{5, 1.2, -4}))
+		// teapot.Draw()
 
 		sdl.GL_SwapBuffers()
 	}
