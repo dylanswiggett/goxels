@@ -59,11 +59,6 @@ func main() {
 	upDirection = glam.Vec3{0, 1, 0}
 
 	cylinder := LoadModel("voxelRes/models/highres.obj")
-	// suzy := LoadModel("voxelRes/models/suzy.obj")
-	// torus := LoadModel("voxelRes/models/torus.obj")
-	// teapot := LoadScaledModel("voxelRes/models/car.obj", .03)
-	// scene := LoadScaledModel("voxelRes/models/car.obj", .2)
-	// scene := LoadModel("voxelRes/models/whatever.obj")
 	
 	/* HANDLE OPENGL RENDERING */
 

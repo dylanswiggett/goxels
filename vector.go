@@ -36,6 +36,10 @@ func (v *Vec3) Add(v1 Vec3) Vec3 {
 	return V3(v.X + v1.X, v.Y + v1.Y, v.Z + v1.Z)
 }
 
+func (v *Vec3) Subtract(v1 Vec3) Vec3 {
+	return V3(v.X - v1.X, v.Y - v1.Y, v.Z - v1.Z)
+}
+
 func (v *Vec3) Scale(s float32) Vec3 {
 	return V3(v.X * s, v.Y * s, v.Z * s)
 }
@@ -77,6 +81,10 @@ func (v *Vec2) Add(v1 Vec2) Vec2{
 	return V2(v.X + v1.X, v.Y + v1.Y)
 }
 
+func (v *Vec2) Subtract(v1 Vec2) Vec2{
+	return V2(v.X - v1.X, v.Y - v1.Y)
+}
+
 func (v *Vec2) Scale(s float32) Vec2 {
 	return V2(v.X * s, v.Y * s)
 }
@@ -85,6 +93,10 @@ func (v *Vec2) Dot(v1 Vec2) float32 {
 	return v.X * v1.X + v.Y * v1.Y
 }
 
+/*
+ * Computes the z value of the cross product of the two vectors,
+ * assuming that they each have z coordinates equal to zero.
+ */
 func (v *Vec3) CrossZ(v1 Vec2) float32 {
 	return v.X * v1.Y - v.Y * v1.X
 }
