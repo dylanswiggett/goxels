@@ -29,6 +29,10 @@ type Octree struct {
 	Position, Dimension Vec3
 }
 
+func NewOctree(position, dimension Vec3, maxSubdiv int) Octree {
+	return Octree{NewOctreeNode(), maxSubdiv, position, dimension}
+}
+
 /*
  * Scales the vector so that each of its elements is in the range [0,1],
  * as long as those values were non-negative and less than or equal to
@@ -36,29 +40,6 @@ type Octree struct {
  */
 func ScaleToUnitDimension(v, dimension Vec3) Vec3 {
 	return V3(v.X / dimension.X, v.Y / dimension.Y, v.Z / dimension.Z)
-}
-
-/*
- * Scales the vector to fit inside a child of an OctreeNode. Basically,
- * the bytes x, y, and z indicate whether or not the vector is going
- * to be used inside the child node that is shifted in the x, y, and z
- * directions (0) or not (1).
- * 
- * Assumes the input vector is in [0,1]^3, and returns a vector in the
- * same range.
- */
-func ScaleToHalfDimension(v Vec3, x, y, z byte) Vec3{
-	newVec := V3(v.X * 2, v.Y * 2, v.Z * 2)
-	if x == 1 {
-		newVec.X = newVec.X - 1
-	}
-	if y == 1 {
-		newVec.Y = newVec.Y - 1
-	}
-	if z == 1 {
-		newVec.Z = newVec.Z - 1
-	}
-	return newVec
 }
 
 /*
@@ -82,18 +63,50 @@ func (node *OctreeNode) AddVoxel(v *Voxel, pos Vec3, maxSubdiv int) {
 		}
 	}
 	// Pick the right subnode, then calculate the new sub-position vector.
-	var x, y, z = byte(0), byte(0), byte(0)
-	if pos.X >= .5 {
-		x = 1
+	pos = pos.Scale(2)
+	var x, y, z = int(pos.X), int(pos.Y), int(pos.Z)
+	if pos.X >= 1 {
+		pos.X -= 1
 	}
-	if pos.Y >= .5 {
-		y = 1
+	if pos.Y >= 1 {
+		pos.Y -= 1
 	}
-	if pos.Z >= .5 {
-		y = 1
+	if pos.Z >= 1 {
+		pos.Z -= 1
 	}
-	pos = ScaleToHalfDimension(pos, x, y, z)
 	node.Children[x][y][z].AddVoxel(v, pos, maxSubdiv - 1)
+}
+
+func (node *OctreeNode) BuildTree() {
+	if !node.IsLeaf {
+		for x := 0; x < 2; x++ {
+			for y := 0; y < 2; y++ {
+				for z := 0; z < 2; z++ {
+					node.Children[x][y][z].BuildTree()
+				}
+			}
+		}
+
+		dim := node.Contents.Dimension()
+		for x := 0; x < dim; x++ {
+			for y := 0; y < dim; y++ {
+				for z := 0; z < dim; z++ {
+					xMod := (x * 2) % dim
+					yMod := (y * 2) % dim
+					zMod := (z * 2) % dim
+					avgVox := node.Children[(x * 2) / dim][(y * 2) / dim][(z * 2) / dim].
+						Contents.AverageVoxelsInRange(
+						xMod, yMod, zMod, xMod + 1, yMod + 1, zMod + 1)
+					
+					node.Contents.SetVoxel(x, y, z, &avgVox)
+				}
+			}
+		}
+	}
+}
+
+func (tree *Octree) BuildTree() {
+	tree.Root.BuildTree()
 }
 
 /*

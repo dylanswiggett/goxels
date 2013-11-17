@@ -23,6 +23,16 @@ func InitGL() {
 }
 
 func main() {
+	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 7)
+	for x := float32(0); x <= 10.0; x += .01 {
+		fmt.Println("x = ", x)
+		for y := float32(0); y <= 10.0; y+= .01 {
+			testVoxel := NewVoxel(1, 1, 1, 1, V3(1, 0, 0))
+			tree.AddVoxel(&testVoxel, V3(x, y, x))
+		}
+	}
+	tree.BuildTree()
+
 	fmt.Println("Initializing...")
 	if sdl.Init(sdl.INIT_EVERYTHING) != 0 {
 		panic(sdl.GetError())
