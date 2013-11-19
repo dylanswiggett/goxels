@@ -39,6 +39,13 @@ func (c *Camera) SetPerspective(FOV float32) {
 	c.projection = &perspecMat
 }
 
+func (c *Camera) SetOrthographic(zoom float32) {
+	c.isChanged = true
+	orthoMat := glam.Orthographic(zoom,
+		float32(WindowW)/float32(WindowH), 0.1, 100.0)
+	c.projection = &orthoMat
+}
+
 func (c *Camera) LookAt(eye, look, up glam.Vec3) {
 	c.isChanged = true
 	lookMat := glam.LookAt(eye, look, up)

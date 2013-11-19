@@ -6,7 +6,7 @@ import(
 	"github.com/drakmaniso/glam"
 	"fmt"
 	"time"
-	"math"
+	// "math"
 )
 
 var WindowW, WindowH = 1200, 800
@@ -23,7 +23,7 @@ func InitGL() {
 }
 
 func main() {
-	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 7)
+	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 5)
 	for x := float32(0); x <= 10.0; x += .01 {
 		fmt.Println("x = ", x)
 		for y := float32(0); y <= 10.0; y+= .01 {
@@ -54,28 +54,29 @@ func main() {
 		"voxelRes/shader.frag")
 	shader.Use()
 
+	cameraPosition = glam.Vec3{-1, 0, 0}
+	forwardDirection = glam.Vec3{1, 0, 0}
+	rightDirection = glam.Vec3{0, 0, 1}
+	upDirection = glam.Vec3{0, 1, 0}
+
 	camera = MakeCamera()
-	camera.SetPerspective(3.14/4.0)
+	camera.SetOrthographic(1)
 	camera.SetMName("M")
 	camera.SetVPName("VP")
+	camera.SetView(cameraPosition, forwardDirection, upDirection)
 
 	sdl.WarpMouse(WindowW / 2, WindowH / 2)
 	for ev := sdl.PollEvent(); ev != nil; ev = sdl.PollEvent() {
 	}
 
-	cameraPosition = glam.Vec3{10, 10, 10}
-	forwardDirection = glam.Vec3{-1, 0, 0}
-	rightDirection = glam.Vec3{0, 0, 1}
-	upDirection = glam.Vec3{0, 1, 0}
-
-	cylinder := LoadModel("voxelRes/models/highres.obj")
+	plane := LoadModel("voxelRes/models/plane.obj")
 	
 	/* HANDLE OPENGL RENDERING */
 
 	ticks := 2000
 	running := true
 	for running {
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 		ticks += 1
 
 		if ticks % 100 == 0 {
@@ -129,20 +130,14 @@ func main() {
 
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-		rotVal := float64(float32(ticks) / 50)
-		shader.GetUniformLocation("lightPos").Uniform3f(
-			float32(3 * math.Cos(rotVal * .9 + 1)), 1, float32(3 * math.Sin(rotVal * .9 + 1)))
-		// shader.GetUniformLocation("lightPos").Uniform3f(3, 1, 3)
+		// rotVal := float64(float32(ticks) / 50)
+		// shader.GetUniformLocation("lightPos").Uniform3f(
+		// 	float32(3 * math.Cos(rotVal * .9 + 1)), 1, float32(3 * math.Sin(rotVal * .9 + 1)))
+		shader.GetUniformLocation("lightPos").Uniform3f(3, 1, 3)
 		shader.GetUniformLocation("cameraPos").Uniform3f(cameraPosition.X, cameraPosition.Y, cameraPosition.Z);
 		
-		camera.SetView(cameraPosition, forwardDirection, upDirection)
-
-		camera.Prepare(shader, Rotate(float32(rotVal), glam.Vec3{0, 1, 0}))
-		// scene.Draw()
-		cylinder.Draw()
-
-		camera.Prepare(shader, Rotate(float32(rotVal), glam.Vec3{0, 1, 0}).Translate(glam.Vec3{5, 1.2, -4}))
-		// teapot.Draw()
+		camera.Prepare(shader, Scale(glam.Vec3{0,float32(WindowH) / float32(WindowW), 1}))
+		plane.Draw()
 
 		sdl.GL_SwapBuffers()
 	}
