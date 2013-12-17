@@ -1,5 +1,7 @@
 package main
 
+var BRICK_SIZE = 8
+
 type RGBA struct {
 	R, G, B, A float32
 }
@@ -7,6 +9,14 @@ type RGBA struct {
 type Voxel struct {
 	Properties RGBA
 	Normal Vec3
+}
+
+func (v *Voxel) ColorInt() int {
+	r := int(v.Properties.R * 255)
+	g := int(v.Properties.G * 255)
+	b := int(v.Properties.B * 255)
+	a := int(v.Properties.A * 255)
+	return (((r << 8 + g) << 8 + b) << 8) + a
 }
 
 func NewVoxel(r, g, b, a float32, normal Vec3) Voxel {
@@ -32,11 +42,17 @@ func AverageVoxels(voxels []Voxel) Voxel {
 }
 
 type Brick struct {
-	Voxels [8][8][8]*Voxel
+	Voxels [][][]*Voxel
 }
 
 func NewBrick() Brick{
-	var newVoxels [8][8][8]*Voxel
+	newVoxels := make([][][]*Voxel, BRICK_SIZE)
+	for x := 0; x < BRICK_SIZE; x++ {
+		newVoxels[x] = make([][]*Voxel, BRICK_SIZE)
+		for y := 0; y < BRICK_SIZE; y++ {
+			newVoxels[x][y] = make([]*Voxel, BRICK_SIZE)
+		}
+	}
 	return Brick{newVoxels}
 }
 

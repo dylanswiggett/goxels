@@ -1,5 +1,11 @@
 package main
 
+import(
+	"github.com/hishboy/gocommons/lang"
+	"math"
+	"fmt"
+)
+
 type OctreeNode struct {
 	Children [2][2][2]*OctreeNode
 	IsLeaf, IsSolid bool
@@ -12,6 +18,16 @@ func NewOctreeNode() OctreeNode{
 	return OctreeNode{children, true, false, NewBrick(), RGBA{0, 0, 0, 0}}
 }
 
+type Octree struct {
+	Root OctreeNode
+	MaxSubdiv int
+	Position, Dimension Vec3
+}
+
+func NewOctree(position, dimension Vec3, maxSubdiv int) Octree {
+	return Octree{NewOctreeNode(), maxSubdiv, position, dimension}
+}
+
 func (o *OctreeNode) Subdivide() {
 	for x := 0; x < len(o.Children); x++ {
 		for y := 0; y < len(o.Children[x]); y++ {
@@ -21,16 +37,6 @@ func (o *OctreeNode) Subdivide() {
 			}
 		}
 	}
-}
-
-type Octree struct {
-	Root OctreeNode
-	MaxSubdiv int
-	Position, Dimension Vec3
-}
-
-func NewOctree(position, dimension Vec3, maxSubdiv int) Octree {
-	return Octree{NewOctreeNode(), maxSubdiv, position, dimension}
 }
 
 /*
@@ -53,9 +59,9 @@ func (node *OctreeNode) AddVoxel(v *Voxel, pos Vec3, maxSubdiv int) {
 	if node.IsLeaf {
 		if maxSubdiv == 0 {
 			// TODO: If there's already a voxel here, average!
-			node.Contents.SetVoxel(int(pos.X * 8),
-								   int(pos.Y * 8),
-								   int(pos.Z * 8), v)
+			node.Contents.SetVoxel(int(pos.X * float32(BRICK_SIZE)),
+								   int(pos.Y * float32(BRICK_SIZE)),
+								   int(pos.Z * float32(BRICK_SIZE)), v)
 			return
 		} else {
 			node.IsLeaf = false
@@ -75,6 +81,21 @@ func (node *OctreeNode) AddVoxel(v *Voxel, pos Vec3, maxSubdiv int) {
 		pos.Z -= 1
 	}
 	node.Children[x][y][z].AddVoxel(v, pos, maxSubdiv - 1)
+}
+
+/*
+ * Adds the given voxel at the most precise point possible in the octree.
+ * Assumes that the given voxel falls within the bounds of the octree.
+ */
+func (tree *Octree) AddVoxel(v *Voxel, pos Vec3) {
+	pos = pos.Subtract(tree.Position)	// Produce a relative vector
+	pos = ScaleToUnitDimension(pos, tree.Dimension)
+		// It's easier to index when the position is in [0,1]^3
+	tree.Root.AddVoxel(v, pos, tree.MaxSubdiv)
+}
+
+func (tree *Octree) BuildTree() {
+	tree.Root.BuildTree()
 }
 
 func (node *OctreeNode) BuildTree() {
@@ -105,17 +126,81 @@ func (node *OctreeNode) BuildTree() {
 	}
 }
 
-func (tree *Octree) BuildTree() {
-	tree.Root.BuildTree()
-}
+func (tree *Octree) BuildGPURepresentation() ([]int32, [][][]int32) {
+	nodes := make([]OctreeNode, 0)
+	nodeCount := 0
+	nodeQueue := lang.NewQueue()
+	nodeQueue.Push(tree.Root)
 
-/*
- * Adds the given voxel at the most precise point possible in the octree.
- * Assumes that the given voxel falls within the bounds of the octree.
- */
-func (tree *Octree) AddVoxel(v *Voxel, pos Vec3) {
-	pos = pos.Subtract(tree.Position)	// Produce a relative vector
-	pos = ScaleToUnitDimension(pos, tree.Dimension)
-		// It's easier to index when the position is in [0,1]^3
-	tree.Root.AddVoxel(v, pos, tree.MaxSubdiv)
+	// Find every node. Store in a list as a prefix traversal
+	for nodeQueue.Len() != 0 {
+		n := nodeQueue.Poll().(OctreeNode)
+		nodeCount++
+		if n.IsLeaf {
+			nodes = append(nodes, n)
+		} else {
+			for x := 0; x < len(n.Children); x++ {
+				for y := 0; y < len(n.Children[x]); y++ {
+					for z := 0; z < len(n.Children[x][y]); z++ {
+						nodeQueue.Push(*n.Children[x][y][z])
+					}
+				}
+			}
+		}
+	}
+
+	fmt.Println("Processing", nodeCount, "octree nodes.")
+
+	// Build a small block for voxel data
+	brickBlockDimension := BRICK_SIZE * int(math.Ceil(math.Pow(float64(nodeCount), 1.0/3.0)))
+	bricks := make([][][]int32, brickBlockDimension)
+	for i, _ := range(bricks) {
+		bricks[i] = make([][]int32, brickBlockDimension)
+		for j, _ := range(bricks[i]) {
+			bricks[i][j] = make([]int32, brickBlockDimension)
+		}
+	}
+
+	fmt.Println("Using a", brickBlockDimension, "cubed block of voxel data.")
+
+	// Populate both of the return lists
+	nodeData := make([]int32, nodeCount * 2)
+	totalVoxels := 0
+	for pos := 0; pos < len(nodes); pos++ {
+		brickX := BRICK_SIZE * pos % brickBlockDimension
+		brickY := BRICK_SIZE * (pos / brickBlockDimension) % brickBlockDimension
+		brickZ := BRICK_SIZE * (pos / (brickBlockDimension * brickBlockDimension)) %
+			brickBlockDimension
+		for x := 0; x < BRICK_SIZE; x++ {
+			for y := 0; y < BRICK_SIZE; y++ {
+				for z := 0; z < BRICK_SIZE; z++ {
+					vox := nodes[pos].Contents.Voxels[x][y][z]
+					colorInt := 0
+					if vox != nil {
+						colorInt = vox.ColorInt()
+						totalVoxels++
+					}
+					bricks[brickX + x][brickY + y][brickZ + z] = int32(colorInt)
+						
+				}
+			}
+		}
+		nodeVal := 0
+		if nodes[pos].IsLeaf {
+			nodeVal = 1
+		}
+		nodeVal <<= 1
+		// TODO: set data type (not yet implemented)
+		nodeVal <<= 30
+		// Rather than tracking the location of the children of the nodes
+		// (which would be complicated), we set the location when we know
+		// that we are building the first child node.
+		nodeData[pos * 2] = int32(nodeVal)
+		if pos % 8 == 0 {
+			nodeData[(pos / 8) * 2] += int32(pos)
+		}
+		nodeData[pos * 2 + 1] = int32((brickX << 10 + brickY) << 10 + brickZ)
+	}
+	fmt.Println("Found", totalVoxels, "individual voxels.")
+	return nodeData, bricks
 }

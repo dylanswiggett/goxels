@@ -9,6 +9,10 @@ layout(std140) uniform octree {
 	octreeNode nodes[];
 };
 
+// Nodes in the octree reference locations here for actual voxel data.
+// Actually a huge number of 8x8x8 voxel blocks, packed into a single texture.
+uniform sampler3D voxelBlocks;
+
 out vec3 color;
 
 uniform int time;
