@@ -21,6 +21,13 @@ uniform vec3 lightPos;
 
 in vec3 cameraDir;
 
+vec4 colorAtBrickLoc(ivec3 pos) {
+	return texelFetch(voxelBlocks, pos, 0);
+}
+
 void main(){
-	color = cameraDir;
+	color = colorAtBrickLoc(ivec3((time / 20) % 10,gl_FragCoord.x / 4,gl_FragCoord.y / 3)).rgb;
+//	if (color.x == 0 && color.y == 0 && color.z == 0) {
+//		color = vec3(1, 0, 0);
+//	}
 }

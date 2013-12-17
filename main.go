@@ -24,21 +24,32 @@ func InitGL() {
 }
 
 func main() {
-	fmt.Println("Generating simple test octree")
+	fmt.Println("Generating simple test octree...")
 	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 5)
 	data := 0
 	for x := float32(0); x <= 10.0; x += .01 {
 		for y := float32(0); y <= 10.0; y+= .01 {
-			data++
-			testVoxel := NewVoxel(1, 1, 1, 1, V3(1, 0, 0))
-			tree.AddVoxel(&testVoxel, V3(x, y, x))
+			for z := float32(0); z <= 1.0 && x + z <= 10; z+= .1 {
+				data++
+				testVoxel := NewVoxel(1, x / 10.0, 0, 1, V3(1, 0, 0))
+				tree.AddVoxel(&testVoxel, V3(x, y, x + z))
+			}
 		}
 	}
 	fmt.Println("Called AddVoxel", data, "times.")
 	tree.BuildTree()
-	octreeData, brickData := tree.BuildGPURepresentation()
+	octreeData, brickData, brickDim := tree.BuildGPURepresentation()
 
-	fmt.Println("Initializing...")
+	found := 0
+	for _, elem := range(brickData) {
+		if elem != 0 {
+			found++
+		}
+		// brickData[i] = int32(i)
+	}
+	fmt.Println("Found", found, "non-empty voxels on second pass.")
+
+	fmt.Println("Initializing rendering...")
 	if sdl.Init(sdl.INIT_EVERYTHING) != 0 {
 		panic(sdl.GetError())
 	}
@@ -57,7 +68,7 @@ func main() {
 
 	shader := createShader("voxelRes/shader.vert",
 		"voxelRes/shader.frag")
-	shader.Use()
+	// shader.Use()
 
 	cameraPosition = glam.Vec3{-1, 0, 0}
 	forwardDirection = glam.Vec3{1, 0, 0}
@@ -69,9 +80,12 @@ func main() {
 	bricks := gl.GenTexture()
 	bricks.Bind(gl.TEXTURE_3D)
 	gl.TexImage3D(gl.TEXTURE_3D, 0, gl.RGBA,
-		len(brickData), len(brickData[0]), len(brickData[0][0]), 
-		0, gl.RGBA, gl.BYTE, brickData)
+		brickDim, brickDim, brickDim,
+		0, gl.RGBA, gl.UNSIGNED_BYTE, brickData)
 	shader.GetUniformLocation("voxelBlocks").Uniform1i(int(bricks))
+	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	shader.Use()
 
 	camera = MakeCamera()
 	camera.SetOrthographic(1)
@@ -149,7 +163,8 @@ func main() {
 		// 	float32(3 * math.Cos(rotVal * .9 + 1)), 1, float32(3 * math.Sin(rotVal * .9 + 1)))
 		shader.GetUniformLocation("lightPos").Uniform3f(3, 1, 3)
 		shader.GetUniformLocation("cameraPos").Uniform3f(cameraPosition.X, cameraPosition.Y, cameraPosition.Z);
-		
+		shader.GetUniformLocation("time").Uniform1i(ticks)
+
 		camera.Prepare(shader, Scale(glam.Vec3{0,float32(WindowH) / float32(WindowW), 1}))
 		plane.Draw()
 

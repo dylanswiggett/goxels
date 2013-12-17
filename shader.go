@@ -3,7 +3,6 @@ package main
 import(
 	"io/ioutil"
 	"github.com/go-gl/gl"
-	"fmt"
 )
 
 func readFileToString(path string) string{
@@ -16,11 +15,9 @@ func createShader(vertex, fragment string) gl.Program{
 	vshader := gl.CreateShader(gl.VERTEX_SHADER)
 	vshader.Source(readFileToString(vertex))
 	vshader.Compile()
-	fmt.Println("Making vertex shader!")
 	if vshader.Get(gl.COMPILE_STATUS) != gl.TRUE {
 		panic("vertex shader error: " + vshader.GetInfoLog())
 	}
-	fmt.Println("Done making vertex shader!")
 
 	// fragment shader
 	fshader := gl.CreateShader(gl.FRAGMENT_SHADER)
