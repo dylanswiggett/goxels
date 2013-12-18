@@ -25,11 +25,11 @@ func InitGL() {
 
 func main() {
 	fmt.Println("Generating simple test octree...")
-	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 5)
+	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 6)
 	data := 0
 	for x := float32(0); x <= 10.0; x += .01 {
 		for y := float32(0); y <= 10.0; y+= .01 {
-			for z := float32(0); z <= 1.0 && x + z <= 10; z+= .1 {
+			for z := float32(0); z <= 1.0 && x + z <= 10; z+= .05 {
 				data++
 				testVoxel := NewVoxel(1, x / 10.0, 0, 1, V3(1, 0, 0))
 				tree.AddVoxel(&testVoxel, V3(x, y, x + z))

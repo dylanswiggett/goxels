@@ -152,7 +152,8 @@ func (tree *Octree) BuildGPURepresentation() ([]int32, []int32, int) {
 	fmt.Println("Processing", nodeCount, "octree nodes.")
 
 	// Build a small block for voxel data
-	brickBlockDimension := BRICK_SIZE * int(math.Ceil(math.Pow(float64(nodeCount), 1.0/3.0)))
+	brickDimension := int(math.Ceil(math.Pow(float64(nodeCount), 1.0/3.0)))
+	brickBlockDimension := BRICK_SIZE * brickDimension
 	bricks := make([][][]int32, brickBlockDimension)
 	for i, _ := range(bricks) {
 		bricks[i] = make([][]int32, brickBlockDimension)
@@ -161,16 +162,16 @@ func (tree *Octree) BuildGPURepresentation() ([]int32, []int32, int) {
 		}
 	}
 
-	fmt.Println("Using a", brickBlockDimension, "cubed block of voxel data.")
+	fmt.Println(". Using a", brickBlockDimension, "cubed block of voxel data.")
 
 	// Populate both of the return lists
 	nodeData := make([]int32, nodeCount * 2)
 	totalVoxels := 0
 	for pos := 0; pos < len(nodes); pos++ {
-		brickX := (BRICK_SIZE * pos) % brickBlockDimension
-		brickY := (BRICK_SIZE * (pos / brickBlockDimension)) % brickBlockDimension
-		brickZ := (BRICK_SIZE * (pos / (brickBlockDimension * brickBlockDimension))) %
-			brickBlockDimension
+		brickX := BRICK_SIZE * (pos % brickDimension)
+		brickY := BRICK_SIZE * ((pos / brickDimension) % brickDimension)
+		brickZ := BRICK_SIZE * ((pos / (brickDimension * brickDimension)) %
+			brickDimension)
 		for x := 0; x < BRICK_SIZE; x++ {
 			for y := 0; y < BRICK_SIZE; y++ {
 				for z := 0; z < BRICK_SIZE; z++ {
@@ -202,6 +203,9 @@ func (tree *Octree) BuildGPURepresentation() ([]int32, []int32, int) {
 		nodeData[pos * 2 + 1] = int32((brickX << 10 + brickY) << 10 + brickZ)
 	}
 	fmt.Println("Found", totalVoxels, "individual voxels.")
+
+	// Produce the final, 1D slice of brick data.
+	// TODO: Make everything write to this 1D array to start with, rather than copying.
 	flattenedBricks := make([]int32, brickBlockDimension * brickBlockDimension * brickBlockDimension)
 	for x := 0; x < brickBlockDimension; x++ {
 		for y := 0; y < brickBlockDimension; y++ {
