@@ -2,7 +2,7 @@ package main
 
 import(
 	"io/ioutil"
-	"github.com/go-gl/gl"
+	"github.com/dylanswiggett/gl"
 )
 
 func readFileToString(path string) string{

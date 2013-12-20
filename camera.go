@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/drakmaniso/glam"
-	"github.com/go-gl/gl"
+	"github.com/dylanswiggett/gl"
 )
 
 type Camera struct {

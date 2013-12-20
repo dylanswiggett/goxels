@@ -3,7 +3,7 @@ package main
 import(
 	"github.com/banthar/Go-SDL/sdl"
 	"github.com/hishboy/gocommons/lang"
-	"github.com/go-gl/gl"
+	"github.com/dylanswiggett/gl"
 	"github.com/drakmaniso/glam"
 	"fmt"
 	"time"

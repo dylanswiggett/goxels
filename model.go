@@ -1,6 +1,6 @@
 package main
 
-import "github.com/go-gl/gl"
+import "github.com/dylanswiggett/gl"
 
 /*
  * NO SUPPORT FOR TEXTURED MODELS
