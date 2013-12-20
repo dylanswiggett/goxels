@@ -2,6 +2,7 @@ package main
 
 import(
 	"github.com/banthar/Go-SDL/sdl"
+	"github.com/hishboy/gocommons/lang"
 	"github.com/go-gl/gl"
 	"github.com/drakmaniso/glam"
 	"fmt"
@@ -9,11 +10,20 @@ import(
 	// "math"
 )
 
+const (
+	SSBO_BINDING     = 0
+)
+
 var WindowW, WindowH = 1200, 800
 
 var camera *Camera
 
 var cameraPosition, forwardDirection, rightDirection, upDirection glam.Vec3
+
+type TestBlock struct {
+	test1 int
+	test2 int
+}
 
 func InitGL() {
 	gl.ClearColor(1, 1, 1, 0)
@@ -25,10 +35,10 @@ func InitGL() {
 
 func main() {
 	fmt.Println("Generating simple test octree...")
-	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 6)
+	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 4)
 	data := 0
-	for x := float32(0); x <= 10.0; x += .01 {
-		for y := float32(0); y <= 10.0; y+= .01 {
+	for x := float32(0); x <= 10.0; x += .05 {
+		for y := float32(0); y <= 10.0; y+= .05 {
 			for z := float32(0); z <= 1.0 && x + z <= 10; z+= .05 {
 				data++
 				testVoxel := NewVoxel(1, x / 10.0, 0, 1, V3(1, 0, 0))
@@ -40,14 +50,37 @@ func main() {
 	tree.BuildTree()
 	octreeData, brickData, brickDim := tree.BuildGPURepresentation()
 
-	found := 0
-	for _, elem := range(brickData) {
-		if elem != 0 {
-			found++
+	testBools := make([]bool, len(octreeData))
+	testQueue := lang.NewQueue()
+	testQueue.Push(uint(0))
+	for testQueue.Len() != 0 {
+		loc := testQueue.Poll().(uint)
+		if testBools[loc] == true {
+			fmt.Println("Found node loop. Exiting.")
+			panic(1)
 		}
-		// brickData[i] = int32(i)
+		testBools[loc] = true
+		if octreeData[loc * 2] & 0x80000000 == 0 {
+			fmt.Printf("Child data for %3X data:0x%8X\n", loc, octreeData[loc * 2])
+			childLoc := octreeData[loc * 2] & 0x3FFFFFFF;
+			testQueue.Push(childLoc)
+			testQueue.Push(childLoc + 1)
+			testQueue.Push(childLoc + 2)
+			testQueue.Push(childLoc + 3)
+			testQueue.Push(childLoc + 4)
+			testQueue.Push(childLoc + 5)
+			testQueue.Push(childLoc + 6)
+			testQueue.Push(childLoc + 7)
+		}
 	}
-	fmt.Println("Found", found, "non-empty voxels on second pass.")
+
+	// for _, test := range(testBools) {
+	// 	// fmt.Println("test")
+	// 	if test == false {
+	// 		fmt.Println("Found disconnected node. Exiting.")
+	// 		panic(1)
+	// 	}
+	// }
 
 	fmt.Println("Initializing rendering...")
 	if sdl.Init(sdl.INIT_EVERYTHING) != 0 {
@@ -75,8 +108,6 @@ func main() {
 	rightDirection = glam.Vec3{0, 0, 1}
 	upDirection = glam.Vec3{0, 1, 0}
 
-	shader.GetUniformLocation("octree").Uniform2iv(len(octreeData), octreeData)
-
 	bricks := gl.GenTexture()
 	bricks.Bind(gl.TEXTURE_3D)
 	gl.TexImage3D(gl.TEXTURE_3D, 0, gl.RGBA,
@@ -85,7 +116,35 @@ func main() {
 	shader.GetUniformLocation("voxelBlocks").Uniform1i(int(bricks))
 	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	fmt.Printf("%X\n", gl.GetError())
+
+	shaderOctreeData := make([]int32, len(octreeData))
+	for i, data := range(octreeData) {
+		shaderOctreeData[i] = int32(data)
+	}
+
+	offsetList := make([]int32, 1)
+	gl.GetIntegerv(gl.SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, offsetList)
+	offset:= int(offsetList[0])
+
+	gl.GetIntegerv(gl.SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, offsetList)
+	fmt.Println("SSBO Offset:",offsetList[0])
+
 	shader.Use()
+
+	octreeBuffer := gl.GenBuffer()
+	octreeBuffer.Bind(gl.SHADER_STORAGE_BUFFER)
+	octreeBuffer.BindBufferRange(gl.SHADER_STORAGE_BUFFER, SSBO_BINDING, offset, uint(len(octreeData) * 4))
+	gl.BufferData(gl.SHADER_STORAGE_BUFFER, len(octreeData) * 4, shaderOctreeData, gl.STATIC_DRAW)
+	octreeIndex := shader.GetProgramResourceIndex(gl.SHADER_STORAGE_BLOCK, "octree")
+	if octreeIndex == gl.INVALID_INDEX {
+		fmt.Println("Failed to allocate GPU buffer for octree data. Exiting.")
+		panic(1)
+	}
+	shader.ShaderStorageBlockBinding(octreeIndex, SSBO_BINDING)
+	gl.MemoryBarrier(gl.SHADER_STORAGE_BARRIER_BIT)
+
+	shader.GetUniformLocation("worldSize").Uniform3f(10.0, 10.0, 10.0)
 
 	camera = MakeCamera()
 	camera.SetOrthographic(1)

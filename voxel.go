@@ -28,15 +28,24 @@ func AverageVoxels(voxels []Voxel) Voxel {
 	avgR, avgG, avgB, avgA = 0, 0, 0, 0//= avgG = avgB =  avgA = 0
 	avgNorm := V3(0, 0, 0)
 
+	numAvg := 0
+
 	for _, vox := range(voxels) {
+		if (vox.Properties.R == 0 &&
+			vox.Properties.G == 0 &&
+			vox.Properties.B == 0 &&
+			vox.Properties.A == 0) {
+			continue
+		}
 		avgR += vox.Properties.R
 		avgG += vox.Properties.G
 		avgB += vox.Properties.B
 		avgA += vox.Properties.A
 		avgNorm = avgNorm.Add(vox.Normal)
+		numAvg++
 	}
 
-	n := float32(len(voxels))
+	n := float32(numAvg)
 
 	return NewVoxel(avgR / n, avgG / n, avgB / n, avgA / n, avgNorm.Scale(1.0 / n))
 }

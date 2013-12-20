@@ -126,8 +126,9 @@ func (node *OctreeNode) BuildTree() {
 	}
 }
 
-func (tree *Octree) BuildGPURepresentation() ([]int32, []int32, int) {
+func (tree *Octree) BuildGPURepresentation() ([]uint, []uint, int) {
 	nodes := make([]OctreeNode, 0)
+	childOffsets := make([]int, 0)
 	nodeCount := 0
 	nodeQueue := lang.NewQueue()
 	nodeQueue.Push(tree.Root)
@@ -136,9 +137,9 @@ func (tree *Octree) BuildGPURepresentation() ([]int32, []int32, int) {
 	for nodeQueue.Len() != 0 {
 		n := nodeQueue.Poll().(OctreeNode)
 		nodeCount++
-		if n.IsLeaf {
-			nodes = append(nodes, n)
-		} else {
+		nodes = append(nodes, n)
+		childOffsets = append(childOffsets, nodeQueue.Len() + 1)
+		if !n.IsLeaf {
 			for x := 0; x < len(n.Children); x++ {
 				for y := 0; y < len(n.Children[x]); y++ {
 					for z := 0; z < len(n.Children[x][y]); z++ {
@@ -154,18 +155,18 @@ func (tree *Octree) BuildGPURepresentation() ([]int32, []int32, int) {
 	// Build a small block for voxel data
 	brickDimension := int(math.Ceil(math.Pow(float64(nodeCount), 1.0/3.0)))
 	brickBlockDimension := BRICK_SIZE * brickDimension
-	bricks := make([][][]int32, brickBlockDimension)
+	bricks := make([][][]uint, brickBlockDimension)
 	for i, _ := range(bricks) {
-		bricks[i] = make([][]int32, brickBlockDimension)
+		bricks[i] = make([][]uint, brickBlockDimension)
 		for j, _ := range(bricks[i]) {
-			bricks[i][j] = make([]int32, brickBlockDimension)
+			bricks[i][j] = make([]uint, brickBlockDimension)
 		}
 	}
 
-	fmt.Println(". Using a", brickBlockDimension, "cubed block of voxel data.")
+	fmt.Println("Using a", brickBlockDimension, "cubed block of voxel data.")
 
 	// Populate both of the return lists
-	nodeData := make([]int32, nodeCount * 2)
+	nodeData := make([]uint, nodeCount * 2)
 	totalVoxels := 0
 	for pos := 0; pos < len(nodes); pos++ {
 		brickX := BRICK_SIZE * (pos % brickDimension)
@@ -181,32 +182,31 @@ func (tree *Octree) BuildGPURepresentation() ([]int32, []int32, int) {
 						colorInt = vox.ColorInt()
 						totalVoxels++
 					}
-					bricks[brickX + x][brickY + y][brickZ + z] = int32(colorInt)
+					bricks[brickX + x][brickY + y][brickZ + z] = uint(colorInt)
 						
 				}
 			}
 		}
-		nodeVal := 0
+		nodeVal := uint(0)
 		if nodes[pos].IsLeaf {
 			nodeVal = 1
 		}
-		nodeVal <<= 1
+		nodeVal = (nodeVal << 1)
 		// TODO: set data type (not yet implemented)
-		nodeVal <<= 30
-		// Rather than tracking the location of the children of the nodes
-		// (which would be complicated), we set the location when we know
-		// that we are building the first child node.
-		nodeData[pos * 2] = int32(nodeVal)
-		if pos % 8 == 0 {
-			nodeData[(pos / 8) * 2] += int32(pos)
+		nodeVal = nodeVal << 30
+		if !nodes[pos].IsLeaf {
+			nodeVal += uint(pos + childOffsets[pos])
 		}
-		nodeData[pos * 2 + 1] = int32((brickX << 10 + brickY) << 10 + brickZ)
+
+		nodeData[pos * 2] = nodeVal
+		nodeData[pos * 2 + 1] = uint((brickX << 10 + brickY) << 10 + brickZ)
+		// nodeData[pos * 2 + 1] = uint((200 << 10 + 200) << 10 + 200)
 	}
 	fmt.Println("Found", totalVoxels, "individual voxels.")
 
 	// Produce the final, 1D slice of brick data.
 	// TODO: Make everything write to this 1D array to start with, rather than copying.
-	flattenedBricks := make([]int32, brickBlockDimension * brickBlockDimension * brickBlockDimension)
+	flattenedBricks := make([]uint, brickBlockDimension * brickBlockDimension * brickBlockDimension)
 	for x := 0; x < brickBlockDimension; x++ {
 		for y := 0; y < brickBlockDimension; y++ {
 			for z := 0; z < brickBlockDimension; z++ {
