@@ -11,7 +11,7 @@ import(
 )
 
 const (
-	SSBO_BINDING     = 0
+	SSBO_BINDING     = 0 	// Must line up with the # in voxelRes/shader.frag
 )
 
 var WindowW, WindowH = 1200, 800
@@ -35,33 +35,37 @@ func InitGL() {
 
 func main() {
 	fmt.Println("Generating simple test octree...")
-	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 4)
+	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 5)
 	data := 0
-	for x := float32(0); x <= 10.0; x += .05 {
-		for y := float32(0); y <= 10.0; y+= .05 {
-			for z := float32(0); z <= 1.0 && x + z <= 10; z+= .05 {
+	for x := float32(0); x <= 10.0; x += .01 {
+		for y := float32(0); y <= 10.0; y+= .01 {
+			for z := float32(0); z <= 1.0 && x + z <= 10.0; z+= .05 {
 				data++
 				testVoxel := NewVoxel(1, x / 10.0, 0, 1, V3(1, 0, 0))
 				tree.AddVoxel(&testVoxel, V3(x, y, x + z))
 			}
+			// testVoxel := NewVoxel(1, x / 10.0, 0, 1, V3(1, 0, 0))
+			// tree.AddVoxel(&testVoxel, V3(x, y, (y + x) / 2))
+			// data++
 		}
 	}
 	fmt.Println("Called AddVoxel", data, "times.")
 	tree.BuildTree()
 	octreeData, brickData, brickDim := tree.BuildGPURepresentation()
 
-	testBools := make([]bool, len(octreeData))
+	testBools := make([]bool, len(octreeData) / 2)
 	testQueue := lang.NewQueue()
-	testQueue.Push(uint(0))
+	testQueue.Push(uint32(0))
+	numNonLeaf := 0
 	for testQueue.Len() != 0 {
-		loc := testQueue.Poll().(uint)
+		loc := testQueue.Poll().(uint32)
 		if testBools[loc] == true {
 			fmt.Println("Found node loop. Exiting.")
 			panic(1)
 		}
 		testBools[loc] = true
 		if octreeData[loc * 2] & 0x80000000 == 0 {
-			fmt.Printf("Child data for %3X data:0x%8X\n", loc, octreeData[loc * 2])
+			// fmt.Printf("Child data for %3X data:0x%8X\n", loc, octreeData[loc * 2])
 			childLoc := octreeData[loc * 2] & 0x3FFFFFFF;
 			testQueue.Push(childLoc)
 			testQueue.Push(childLoc + 1)
@@ -71,16 +75,22 @@ func main() {
 			testQueue.Push(childLoc + 5)
 			testQueue.Push(childLoc + 6)
 			testQueue.Push(childLoc + 7)
+			numNonLeaf++
 		}
 	}
 
-	// for _, test := range(testBools) {
-	// 	// fmt.Println("test")
-	// 	if test == false {
-	// 		fmt.Println("Found disconnected node. Exiting.")
-	// 		panic(1)
-	// 	}
-	// }
+	fmt.Println(numNonLeaf, "octree nodes have children.")
+
+	disconnectedNodes := 0
+	for _, test := range(testBools) {
+		if test == false {
+			disconnectedNodes++
+		}
+	}
+	if disconnectedNodes != 0 {
+		fmt.Println("Found", disconnectedNodes, "disconnected nodes. Exiting.")
+		panic(1)
+	}
 
 	fmt.Println("Initializing rendering...")
 	if sdl.Init(sdl.INIT_EVERYTHING) != 0 {
@@ -110,31 +120,27 @@ func main() {
 
 	bricks := gl.GenTexture()
 	bricks.Bind(gl.TEXTURE_3D)
+	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 	gl.TexImage3D(gl.TEXTURE_3D, 0, gl.RGBA,
 		brickDim, brickDim, brickDim,
 		0, gl.RGBA, gl.UNSIGNED_BYTE, brickData)
-	shader.GetUniformLocation("voxelBlocks").Uniform1i(int(bricks))
-	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	fmt.Printf("%X\n", gl.GetError())
+	bricks.Unbind(gl.TEXTURE_3D)
+
+	// fmt.Printf("%X\n", gl.GetError())
+	// fmt.Printf("%X\n", gl.GetError())
+	// Something errors here. I don't know what, since it works...
+
+	shader.Use()
 
 	shaderOctreeData := make([]int32, len(octreeData))
 	for i, data := range(octreeData) {
 		shaderOctreeData[i] = int32(data)
 	}
 
-	offsetList := make([]int32, 1)
-	gl.GetIntegerv(gl.SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, offsetList)
-	offset:= int(offsetList[0])
-
-	gl.GetIntegerv(gl.SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, offsetList)
-	fmt.Println("SSBO Offset:",offsetList[0])
-
-	shader.Use()
-
 	octreeBuffer := gl.GenBuffer()
 	octreeBuffer.Bind(gl.SHADER_STORAGE_BUFFER)
-	octreeBuffer.BindBufferRange(gl.SHADER_STORAGE_BUFFER, SSBO_BINDING, offset, uint(len(octreeData) * 4))
+	octreeBuffer.BindBufferRange(gl.SHADER_STORAGE_BUFFER, SSBO_BINDING, 0, uint(len(octreeData) * 4))
 	gl.BufferData(gl.SHADER_STORAGE_BUFFER, len(octreeData) * 4, shaderOctreeData, gl.STATIC_DRAW)
 	octreeIndex := shader.GetProgramResourceIndex(gl.SHADER_STORAGE_BLOCK, "octree")
 	if octreeIndex == gl.INVALID_INDEX {
@@ -220,12 +226,18 @@ func main() {
 		// rotVal := float64(float32(ticks) / 50)
 		// shader.GetUniformLocation("lightPos").Uniform3f(
 		// 	float32(3 * math.Cos(rotVal * .9 + 1)), 1, float32(3 * math.Sin(rotVal * .9 + 1)))
+		shader.GetUniformLocation("voxelBlocks").Uniform1i(0)
+		gl.ActiveTexture(gl.TEXTURE0)
+		bricks.Bind(gl.TEXTURE_3D)
+
 		shader.GetUniformLocation("lightPos").Uniform3f(3, 1, 3)
 		shader.GetUniformLocation("cameraPos").Uniform3f(cameraPosition.X, cameraPosition.Y, cameraPosition.Z);
 		shader.GetUniformLocation("time").Uniform1i(ticks)
 
 		camera.Prepare(shader, Scale(glam.Vec3{0,float32(WindowH) / float32(WindowW), 1}))
 		plane.Draw()
+
+		bricks.Unbind(gl.TEXTURE_3D)
 
 		sdl.GL_SwapBuffers()
 	}

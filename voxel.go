@@ -11,12 +11,12 @@ type Voxel struct {
 	Normal Vec3
 }
 
-func (v *Voxel) ColorInt() int {
+func (v *Voxel) ColorInt() uint32 {
 	r := int(v.Properties.R * 255)
 	g := int(v.Properties.G * 255)
 	b := int(v.Properties.B * 255)
 	a := int(v.Properties.A * 255)
-	return (((r << 8 + g) << 8 + b) << 8) + a
+	return (((uint32(a) << 8 + uint32(b)) << 8 + uint32(g)) << 8) + uint32(r)
 }
 
 func NewVoxel(r, g, b, a float32, normal Vec3) Voxel {

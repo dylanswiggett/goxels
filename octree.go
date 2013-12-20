@@ -116,9 +116,7 @@ func (node *OctreeNode) BuildTree() {
 					yMod := (y * 2) % dim
 					zMod := (z * 2) % dim
 					avgVox := node.Children[(x * 2) / dim][(y * 2) / dim][(z * 2) / dim].
-						Contents.AverageVoxelsInRange(
-						xMod, yMod, zMod, xMod + 1, yMod + 1, zMod + 1)
-					
+						Contents.AverageVoxelsInRange(xMod, yMod, zMod, xMod + 1, yMod + 1, zMod + 1)
 					node.Contents.SetVoxel(x, y, z, &avgVox)
 				}
 			}
@@ -126,8 +124,8 @@ func (node *OctreeNode) BuildTree() {
 	}
 }
 
-func (tree *Octree) BuildGPURepresentation() ([]uint, []uint, int) {
-	nodes := make([]OctreeNode, 0)
+func (tree *Octree) BuildGPURepresentation() ([]uint32, []uint32, int) {
+	nodes := make([]OctreeNode, 0, 1000)
 	childOffsets := make([]int, 0)
 	nodeCount := 0
 	nodeQueue := lang.NewQueue()
@@ -155,39 +153,37 @@ func (tree *Octree) BuildGPURepresentation() ([]uint, []uint, int) {
 	// Build a small block for voxel data
 	brickDimension := int(math.Ceil(math.Pow(float64(nodeCount), 1.0/3.0)))
 	brickBlockDimension := BRICK_SIZE * brickDimension
-	bricks := make([][][]uint, brickBlockDimension)
+	bricks := make([][][]uint32, brickBlockDimension)
 	for i, _ := range(bricks) {
-		bricks[i] = make([][]uint, brickBlockDimension)
+		bricks[i] = make([][]uint32, brickBlockDimension)
 		for j, _ := range(bricks[i]) {
-			bricks[i][j] = make([]uint, brickBlockDimension)
+			bricks[i][j] = make([]uint32, brickBlockDimension)
 		}
 	}
 
 	fmt.Println("Using a", brickBlockDimension, "cubed block of voxel data.")
 
 	// Populate both of the return lists
-	nodeData := make([]uint, nodeCount * 2)
+	nodeData := make([]uint32, nodeCount * 2)
 	totalVoxels := 0
 	for pos := 0; pos < len(nodes); pos++ {
 		brickX := BRICK_SIZE * (pos % brickDimension)
 		brickY := BRICK_SIZE * ((pos / brickDimension) % brickDimension)
-		brickZ := BRICK_SIZE * ((pos / (brickDimension * brickDimension)) %
-			brickDimension)
+		brickZ := BRICK_SIZE * ((pos / (brickDimension * brickDimension)) % brickDimension)
 		for x := 0; x < BRICK_SIZE; x++ {
 			for y := 0; y < BRICK_SIZE; y++ {
 				for z := 0; z < BRICK_SIZE; z++ {
 					vox := nodes[pos].Contents.Voxels[x][y][z]
-					colorInt := 0
+					colorInt := uint32(0)
 					if vox != nil {
 						colorInt = vox.ColorInt()
 						totalVoxels++
 					}
-					bricks[brickX + x][brickY + y][brickZ + z] = uint(colorInt)
-						
+					bricks[brickX + x][brickY + y][brickZ + z] = colorInt
 				}
 			}
 		}
-		nodeVal := uint(0)
+		nodeVal := uint32(0)
 		if nodes[pos].IsLeaf {
 			nodeVal = 1
 		}
@@ -195,18 +191,18 @@ func (tree *Octree) BuildGPURepresentation() ([]uint, []uint, int) {
 		// TODO: set data type (not yet implemented)
 		nodeVal = nodeVal << 30
 		if !nodes[pos].IsLeaf {
-			nodeVal += uint(pos + childOffsets[pos])
+			nodeVal += uint32(pos + childOffsets[pos])
 		}
 
 		nodeData[pos * 2] = nodeVal
-		nodeData[pos * 2 + 1] = uint((brickX << 10 + brickY) << 10 + brickZ)
-		// nodeData[pos * 2 + 1] = uint((200 << 10 + 200) << 10 + 200)
+		nodeData[pos * 2 + 1] = uint32((brickX << 10 + brickY) << 10 + brickZ)
+		// nodeData[pos * 2 + 1] = uint32((200 << 10 + 200) << 10 + 200)
 	}
 	fmt.Println("Found", totalVoxels, "individual voxels.")
 
 	// Produce the final, 1D slice of brick data.
 	// TODO: Make everything write to this 1D array to start with, rather than copying.
-	flattenedBricks := make([]uint, brickBlockDimension * brickBlockDimension * brickBlockDimension)
+	flattenedBricks := make([]uint32, brickBlockDimension * brickBlockDimension * brickBlockDimension)
 	for x := 0; x < brickBlockDimension; x++ {
 		for y := 0; y < brickBlockDimension; y++ {
 			for z := 0; z < brickBlockDimension; z++ {
