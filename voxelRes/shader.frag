@@ -48,10 +48,7 @@ vec4 colorAtLoc(vec3 pos) {
 	}
 	ivec3 nodeBrickLoc = nodeBrick(node);
 	nodeBrickLoc += ivec3(vec3(4, 4, 4) * pos / scale);
-	// return vec4(float(10 - maxDepth) / 10.0, float(node) / 100, 0, 1);
-	// return vec4(0, float(node) / 20000.0, 0, 1);
 	// return vec4(float(10 - maxDepth) / 10.0, 0, 0, 1);
-	// return vec4(nodeBrickLoc.xyz, 0);
 	return colorAtBrickLoc(nodeBrickLoc);
 }
 
@@ -59,11 +56,5 @@ void main(){
 	float x = float((time) % 100) / 10.0;
 	float y = clamp(gl_FragCoord.x / 120.0, 0, 10);
 	float z = clamp(gl_FragCoord.y / 100.0, 0, 10);
-	// float col = float(nodes[clamp(int((x + y + z) * 5), 0, 1000)].colorData) / 100;
-	// float col = float(nodes[time].colorData);
-	// float col = nodes[0].colorData;
-	// color = vec3(col, col, col);
 	color = colorAtLoc(vec3(x, y, z)).rgb;
-	// color = vec3(nodeBrick(uint(0))) / 200.0;
-	// color = colorAtBrickLoc(ivec3(int(x), int(y), int(z))).rgb;
 }

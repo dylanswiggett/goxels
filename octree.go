@@ -196,7 +196,6 @@ func (tree *Octree) BuildGPURepresentation() ([]uint32, []uint32, int) {
 
 		nodeData[pos * 2] = nodeVal
 		nodeData[pos * 2 + 1] = uint32((brickX << 10 + brickY) << 10 + brickZ)
-		// nodeData[pos * 2 + 1] = uint32((200 << 10 + 200) << 10 + 200)
 	}
 	fmt.Println("Found", totalVoxels, "individual voxels.")
 

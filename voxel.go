@@ -25,7 +25,7 @@ func NewVoxel(r, g, b, a float32, normal Vec3) Voxel {
 
 func AverageVoxels(voxels []Voxel) Voxel {
 	var avgR, avgG, avgB, avgA float32
-	avgR, avgG, avgB, avgA = 0, 0, 0, 0//= avgG = avgB =  avgA = 0
+	avgR, avgG, avgB, avgA = 0, 0, 0, 0
 	avgNorm := V3(0, 0, 0)
 
 	numAvg := 0

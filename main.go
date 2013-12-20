@@ -39,7 +39,7 @@ func main() {
 	data := 0
 	for x := float32(0); x <= 10.0; x += .01 {
 		for y := float32(0); y <= 10.0; y+= .01 {
-			for z := float32(0); z <= 1.0 && x + z <= 10.0; z+= .05 {
+			for z := float32(0); z < 10.0 && x + z <= 10.0; z+= 1.0 {
 				data++
 				testVoxel := NewVoxel(1, x / 10.0, 0, 1, V3(1, 0, 0))
 				tree.AddVoxel(&testVoxel, V3(x, y, x + z))
@@ -53,6 +53,10 @@ func main() {
 	tree.BuildTree()
 	octreeData, brickData, brickDim := tree.BuildGPURepresentation()
 
+	/*
+	 * A few tests to confirm octree integrity.
+	 */
+
 	testBools := make([]bool, len(octreeData) / 2)
 	testQueue := lang.NewQueue()
 	testQueue.Push(uint32(0))
@@ -65,7 +69,6 @@ func main() {
 		}
 		testBools[loc] = true
 		if octreeData[loc * 2] & 0x80000000 == 0 {
-			// fmt.Printf("Child data for %3X data:0x%8X\n", loc, octreeData[loc * 2])
 			childLoc := octreeData[loc * 2] & 0x3FFFFFFF;
 			testQueue.Push(childLoc)
 			testQueue.Push(childLoc + 1)
@@ -78,8 +81,6 @@ func main() {
 			numNonLeaf++
 		}
 	}
-
-	fmt.Println(numNonLeaf, "octree nodes have children.")
 
 	disconnectedNodes := 0
 	for _, test := range(testBools) {
@@ -126,10 +127,6 @@ func main() {
 		brickDim, brickDim, brickDim,
 		0, gl.RGBA, gl.UNSIGNED_BYTE, brickData)
 	bricks.Unbind(gl.TEXTURE_3D)
-
-	// fmt.Printf("%X\n", gl.GetError())
-	// fmt.Printf("%X\n", gl.GetError())
-	// Something errors here. I don't know what, since it works...
 
 	shader.Use()
 
@@ -223,9 +220,6 @@ func main() {
 
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-		// rotVal := float64(float32(ticks) / 50)
-		// shader.GetUniformLocation("lightPos").Uniform3f(
-		// 	float32(3 * math.Cos(rotVal * .9 + 1)), 1, float32(3 * math.Sin(rotVal * .9 + 1)))
 		shader.GetUniformLocation("voxelBlocks").Uniform1i(0)
 		gl.ActiveTexture(gl.TEXTURE0)
 		bricks.Bind(gl.TEXTURE_3D)
