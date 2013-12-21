@@ -7,7 +7,7 @@ import(
 	"github.com/drakmaniso/glam"
 	"fmt"
 	"time"
-	// "math"
+	"math"
 )
 
 const (
@@ -35,17 +35,17 @@ func InitGL() {
 
 func main() {
 	fmt.Println("Generating simple test octree...")
-	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 5)
+	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 4)
 	data := 0
 	for x := float32(0); x <= 10.0; x += .01 {
 		for y := float32(0); y <= 10.0; y+= .01 {
-			for z := float32(0); z < 10.0 && x + z <= 10.0; z+= 1.0 {
+			for z := float32(0); float64(z) < math.Sin(float64(x)) + 2.0 && x + z <= 10.0; z+= 0.1 {
 				data++
-				testVoxel := NewVoxel(1, x / 10.0, 0, 1, V3(1, 0, 0))
+				testVoxel := NewVoxel(0, float32(int(x * 1000) % 100) / 100.0, 0, 1, V3(1, 0, 0))
 				tree.AddVoxel(&testVoxel, V3(x, y, x + z))
 			}
-			// testVoxel := NewVoxel(1, x / 10.0, 0, 1, V3(1, 0, 0))
-			// tree.AddVoxel(&testVoxel, V3(x, y, (y + x) / 2))
+			// testVoxel := NewVoxel(x / 10.0, y / 10.0, 0, 1, V3(1, 0, 0))
+			// tree.AddVoxel(&testVoxel, V3(x, y, (y * y * x) / 100.0))
 			// data++
 		}
 	}
@@ -205,10 +205,10 @@ func main() {
 		}
 
 		if sdl.GetKeyState()[sdl.K_a] == 1 {
-			cameraPosition = cameraPosition.Plus(rightDirection.Times(.5))
+			cameraPosition = cameraPosition.Plus(rightDirection.Times(-.5))
 		}
 		if sdl.GetKeyState()[sdl.K_d] == 1 {
-			cameraPosition = cameraPosition.Plus(rightDirection.Times(-.5))
+			cameraPosition = cameraPosition.Plus(rightDirection.Times(.5))
 		}
 		if sdl.GetKeyState()[sdl.K_w] == 1 {
 			cameraPosition = cameraPosition.Plus(forwardDirection.Times(.5))
@@ -226,7 +226,13 @@ func main() {
 
 		shader.GetUniformLocation("lightPos").Uniform3f(3, 1, 3)
 		shader.GetUniformLocation("cameraPos").Uniform3f(cameraPosition.X, cameraPosition.Y, cameraPosition.Z);
+		shader.GetUniformLocation("cameraUp").Uniform3f(upDirection.X, upDirection.Y, upDirection.Z)
+		shader.GetUniformLocation("cameraRight").Uniform3f(rightDirection.X, rightDirection.Y, rightDirection.Z)
+		shader.GetUniformLocation("cameraForwards").Uniform3f(forwardDirection.X, forwardDirection.Y, forwardDirection.Z)
 		shader.GetUniformLocation("time").Uniform1i(ticks)
+
+		shader.GetUniformLocation("widthPix").Uniform1i(WindowW);
+		shader.GetUniformLocation("heightPix").Uniform1i(WindowH);
 
 		camera.Prepare(shader, Scale(glam.Vec3{0,float32(WindowH) / float32(WindowW), 1}))
 		plane.Draw()

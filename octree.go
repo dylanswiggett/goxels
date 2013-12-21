@@ -15,7 +15,7 @@ type OctreeNode struct {
 
 func NewOctreeNode() OctreeNode{
 	var children [2][2][2]*OctreeNode
-	return OctreeNode{children, true, false, NewBrick(), RGBA{0, 0, 0, 0}}
+	return OctreeNode{children, true, true, NewBrick(), RGBA{0, 0, 0, 0}}
 }
 
 type Octree struct {
@@ -56,6 +56,7 @@ func ScaleToUnitDimension(v, dimension Vec3) Vec3 {
  * Assumes that the given voxel falls within the bounds of the octree.
  */
 func (node *OctreeNode) AddVoxel(v *Voxel, pos Vec3, maxSubdiv int) {
+	node.IsSolid = false
 	if node.IsLeaf {
 		if maxSubdiv == 0 {
 			// TODO: If there's already a voxel here, average!
@@ -167,35 +168,39 @@ func (tree *Octree) BuildGPURepresentation() ([]uint32, []uint32, int) {
 	nodeData := make([]uint32, nodeCount * 2)
 	totalVoxels := 0
 	for pos := 0; pos < len(nodes); pos++ {
-		brickX := BRICK_SIZE * (pos % brickDimension)
-		brickY := BRICK_SIZE * ((pos / brickDimension) % brickDimension)
-		brickZ := BRICK_SIZE * ((pos / (brickDimension * brickDimension)) % brickDimension)
-		for x := 0; x < BRICK_SIZE; x++ {
-			for y := 0; y < BRICK_SIZE; y++ {
-				for z := 0; z < BRICK_SIZE; z++ {
-					vox := nodes[pos].Contents.Voxels[x][y][z]
-					colorInt := uint32(0)
-					if vox != nil {
-						colorInt = vox.ColorInt()
-						totalVoxels++
-					}
-					bricks[brickX + x][brickY + y][brickZ + z] = colorInt
-				}
-			}
-		}
 		nodeVal := uint32(0)
 		if nodes[pos].IsLeaf {
 			nodeVal = 1
 		}
 		nodeVal = (nodeVal << 1)
-		// TODO: set data type (not yet implemented)
+		if (nodes[pos].IsSolid) {
+			nodeVal += 1
+			nodeData[pos * 2 + 1] = nodes[pos].SolidProperties.ColorInt()
+		} else {
+			brickX := BRICK_SIZE * (pos % brickDimension)
+			brickY := BRICK_SIZE * ((pos / brickDimension) % brickDimension)
+			brickZ := BRICK_SIZE * ((pos / (brickDimension * brickDimension)) % brickDimension)
+			for x := 0; x < BRICK_SIZE; x++ {
+				for y := 0; y < BRICK_SIZE; y++ {
+					for z := 0; z < BRICK_SIZE; z++ {
+						vox := nodes[pos].Contents.Voxels[x][y][z]
+						colorInt := uint32(0)
+						if vox != nil {
+							colorInt = vox.ColorInt()
+							totalVoxels++
+						}
+						bricks[brickX + x][brickY + y][brickZ + z] = colorInt
+					}
+				}
+			}
+			nodeData[pos * 2 + 1] = uint32((brickX << 10 + brickY) << 10 + brickZ)
+		}
 		nodeVal = nodeVal << 30
 		if !nodes[pos].IsLeaf {
 			nodeVal += uint32(pos + childOffsets[pos])
 		}
 
 		nodeData[pos * 2] = nodeVal
-		nodeData[pos * 2 + 1] = uint32((brickX << 10 + brickY) << 10 + brickZ)
 	}
 	fmt.Println("Found", totalVoxels, "individual voxels.")
 
