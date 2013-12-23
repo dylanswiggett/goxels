@@ -39,14 +39,14 @@ func main() {
 	data := 0
 	for x := float32(0); x <= 10.0; x += .01 {
 		for y := float32(0); y <= 10.0; y+= .01 {
-			for z := float32(0); float64(z) < math.Sin(float64(x)) + 2.0 && x + z <= 10.0; z+= 0.1 {
-				data++
-				testVoxel := NewVoxel(0, float32(int(x * 1000) % 100) / 100.0, 0, 1, V3(1, 0, 0))
-				tree.AddVoxel(&testVoxel, V3(x, y, x + z))
-			}
-			// testVoxel := NewVoxel(x / 10.0, y / 10.0, 0, 1, V3(1, 0, 0))
-			// tree.AddVoxel(&testVoxel, V3(x, y, (y * y * x) / 100.0))
-			// data++
+			// for z := float32(0); float64(z) < math.Sin(float64(x)) + 2.0 && x + z <= 10.0; z+= 0.1 {
+			// 	data++
+			// 	testVoxel := NewVoxel(0, float32(int(x * 1000) % 100) / 100.0, 0, 1, V3(1, 0, 0))
+			// 	tree.AddVoxel(&testVoxel, V3(x, y, x + z))
+			// }
+			testVoxel := NewVoxel(x / 10.0, y / 10.0, 0, 1, V3(1, 0, 0))
+			tree.AddVoxel(&testVoxel, V3(x, y, (y * y * x) / 100.0))
+			data++
 		}
 	}
 	fmt.Println("Called AddVoxel", data, "times.")

@@ -84,7 +84,10 @@ vec4 colorAtIntegerLoc(ivec3 pos) {
 }
 
 vec4 cAlong(vec3 start, vec3 dir) {
+
 	vec4 c = vec4(0, 0, 0, 0);
+
+	dir = normalize(dir);
 
 	ivec3 dirS = ivec3(dir.x < 0 ? 1 : 0, dir.y < 0 ? 1 : 0, dir.z < 0 ? 1 : 0);
 
@@ -114,57 +117,79 @@ vec4 cAlong(vec3 start, vec3 dir) {
 	if (tzmax < tmax){ tmax = tzmax;}
 	if (tmax < 0) return c;
 	start = start + dir * (tmin + .1);	// The startition at the edge of the voxel region.
-	ivec3 pos = ivec3(start * worldVoxelSize / worldSize);
-	ivec3 final  = ivec3((start + dir * tmax) * worldVoxelSize / worldSize);
 	
 	//Iterate through the region and find a color to render.
 	uint node = uint(0);
-	vec3 scale = worldSize / 2;
+	uint LOD = 0;
+	int scale = int(log2(worldVoxelSize));
+	ivec3 nodeOrigin = ivec3(-1000, -1000, -1000);
+	ivec3 brickLoc;
+	vec4 newColor;
+	bool solid = false;
 
-    ivec3 error = ivec3(0, 0, 0);
-    ivec3 d = final - pos;
-    ivec3 a = ivec3(abs(d)) << 1;
-    ivec3 s = ivec3(sign(d));
-    ivec3 dom;
-
-    int domDisplacement;
-    if (a.x >= max(a.y, a.z)) { /* x dominant */
-    	dom = ivec3(1, 0, 0);
-    	domDisplacement = a.x >> 1;
-    } else if (a.y >= max(a.x, a.z)) { /* y dominant */
-    	dom = ivec3(0, 1, 0);
-    	domDisplacement = a.y >> 1;
-    } else { /* z dominant */
-    	dom = ivec3(0, 0, 1);
-    	domDisplacement = a.z >> 1;
+	// Traverse the tree.
+    // From: http://www.cse.chalmers.se/edu/year/2013/course/TDA361/grid.pdf
+    vec3 fPos = start * worldVoxelSize / worldSize;
+    ivec3 pos = ivec3(fPos);
+    ivec3 stepDir = ivec3(sign(dir));
+    vec3 deltaT = 1 / dir;
+	vec3 stepTmax = (vec3(pos + stepDir) - fPos) * deltaT;
+	// return vec4(stepTmax, 1);
+	deltaT = abs(deltaT);
+    int maxSteps = 500;
+    while (maxSteps-- > 0) {
+    	if (stepTmax.x < stepTmax.y && stepTmax.x < stepTmax.z) {
+    		pos.x += stepDir.x;
+    		if (pos.x < 0 || pos.x >= worldVoxelSize)
+    			return vec4(0, 0, 0, 0);
+    		stepTmax.x += deltaT.x;
+    	} else if (stepTmax.y < stepTmax.z) {
+    		pos.y += stepDir.y;
+    		if (pos.y < 0 || pos.y >= worldVoxelSize)
+    			return vec4(0, 0, 0, 0);
+    		stepTmax.y += deltaT.y;
+    	} else {
+    		pos.z += stepDir.z;
+    		if (pos.z < 0 || pos.z >= worldVoxelSize)
+    			return vec4(0, 0, 0, 0);
+    		stepTmax.z += deltaT.z;
+    	}
+    	ivec3 offset = (pos - nodeOrigin);// >> (scale - 2);
+    	if (LOD == 0 ||
+    		offset.x <  0 || offset.y < 0  || offset.z <  0 ||
+    		offset.x >= 8 || offset.y >= 8 || offset.z >= 8) {
+    		node = uint(0);
+			LOD = 0;
+			nodeOrigin = ivec3(0, 0, 0);
+			// brickLoc = nodeBrick(node);
+			scale = int(log2(worldVoxelSize));
+			ivec3 posTemp = pos;
+			int maxLOD = 10;//maxSteps / 200;
+			while ((nodes[node].childData & FINAL_MASK) == uint(0) && maxLOD-- >= 0) {
+				scale--;
+				LOD++;
+				ivec3 childLoc = posTemp >> scale;
+				int childOffset = childLoc.x * 4 + childLoc.y * 2 + childLoc.z;
+				posTemp -= childLoc << scale;
+				node = (nodes[node].childData & CHILD_MASK) + uint(childOffset);
+				nodeOrigin += childLoc << scale;
+			}
+			if ((nodes[node].childData & SOLID_MASK) != 0) {
+				newColor = vec4(0, 0, 0, 0);
+				solid = true;
+			} else {
+				brickLoc = nodeBrick(node);
+				solid = false;
+			}
+			offset = pos - nodeOrigin;
+    	}
+    	if (!solid) {
+    		newColor = colorAtBrickLoc(brickLoc + offset);
+    	}
+		if (newColor != vec4(0, 0, 0, 0))
+			return newColor;
     }
-
-    ivec3 sub = ivec3(1, 1, 1) - dom;
-
-    ivec3 aD = a * dom;
-    ivec3 sD = s * dom;
-    ivec3 aS = a * sub;
-    ivec3 fD = final * dom;
-
-    ivec3 zeros = ivec3(0, 0, 0);
-    ivec3 worldVoxelSizeV = ivec3(worldVoxelSize, worldVoxelSize, worldVoxelSize);
-    
-    // Uses a 3D version of Bresenham's Algo.
-    // From: http://www.luberth.com/plotter/line3d.c.txt.html
-    error = sub * (a - domDisplacement);
-    for (;all(lessThanEqual(zeros, pos)) && all(greaterThan(worldVoxelSizeV, pos));) {
-        // if (pos * dom == fD) return vec4(0, 0, 0, 1);
-        vec4 color = colorAtIntegerLoc(pos);
-        if (color != vec4(0, 0, 0, 0))
-        	return color;
-        bvec3 testBools = greaterThanEqual(error * sub, ivec3(0, 0, 0));
-        ivec3 testVals = ivec3(testBools) * sub;
-        pos += s * testVals;
-        error -= domDisplacement * testVals << 1;
-        pos += sD;
-        error += aS;
-    }
-    return vec4(0, 0, 0, 1);
+    return vec4(0, 0, 0, 0);
 }
 
 // 	while (all(lessThan(pos, worldSize)) && all(lessThan(vec3(0, 0, 0), pos))) {
