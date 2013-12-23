@@ -148,6 +148,8 @@ func main() {
 	gl.MemoryBarrier(gl.SHADER_STORAGE_BARRIER_BIT)
 
 	shader.GetUniformLocation("worldSize").Uniform3f(10.0, 10.0, 10.0)
+	shader.GetUniformLocation("worldVoxelSize").Uniform1i(
+		int(math.Pow(2, float64(tree.MaxSubdiv))) * BRICK_SIZE);
 
 	camera = MakeCamera()
 	camera.SetOrthographic(1)
