@@ -136,13 +136,13 @@ vec4 cAlong(vec3 start, vec3 dir) {
 			if (nodeList[i].childMask == nodeList[i].lastMask) {
 				nodeList[i].doneSearching = true;
 			} else {
-				int max = 0;	// THIS DOES SOMETHING. I don't know what, but
+				int max = 1;	// THIS DOES SOMETHING. I don't know what, but
 								// without it the program breaks...
 				while(any(nodeList[i].maskList[nodeList[i].currentMask] &&
-					nodeList[i].childMask) && (max == 0)) // breaks here w/o check.
+					nodeList[i].childMask) && bool(max)) // breaks here w/o check.
 					nodeList[i].currentMask++;
-				nodeList[i].childMask =
-					nodeList[i].childMask || nodeList[i].maskList[nodeList[i].currentMask];
+				nodeList[i].childMask = nodeList[i].childMask ||
+										nodeList[i].maskList[nodeList[i].currentMask];
 			}
 
 			/*
@@ -153,7 +153,7 @@ vec4 cAlong(vec3 start, vec3 dir) {
 						   nextChildDisplacement.z * 1 +
 						   int(nodes[nodeList[i].node].childData & CHILD_MASK);
 			// Decide if node is a child or solid or neither.
-			if ((nodes[nextNode].childData & FINAL_MASK) == 0) {
+			if ((nodes[nextNode].childData & FINAL_MASK) == uint(0)) {
 				ivec3 disp = nextChildDisplacement;
 				nodeList[i + 1].node = nextNode;
 				nodeList[i + 1].xMin = PICK_BY(disp, nodeList[i].xMid, nodeList[i].xMin);
@@ -163,10 +163,15 @@ vec4 cAlong(vec3 start, vec3 dir) {
 				nodeList[i + 1].isGenerated = false;
 				nodeList[i + 1].doneSearching = false;
 				i++;
-			} else if ((nodes[nextNode].childData & LEAF_MASK) != 0) {
-				return vec4(float(i) / 20, float(i) / 20, float(i) / 20, 1);
-			} else {
-				return vec4(1, 0, 0, 1);
+			} else if ((nodes[nextNode].childData & SOLID_MASK) != 0)
+				continue;
+			else {	// LEAF NODE
+				return vec4(nextChildDisplacement, 1);
+				// // return vec4(1, 1, 1, 1);
+				// while (nodeList[i].currentMask == 0)
+				// 	i--;
+				// return vec4(nodeList[i].maskList[nodeList[i].currentMask - 1], 1);
+				// return colorAtBrickLoc(nodeBrick(nextNode));
 			}
 		} else {
 			/*
@@ -206,7 +211,6 @@ vec4 cAlong(vec3 start, vec3 dir) {
 			nodeList[i].isGenerated   = true;
 		}
 	}
-
 	return vec4(0, 0, 0, 1);
 }
 
