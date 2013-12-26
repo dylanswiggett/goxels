@@ -3,7 +3,8 @@
 #define MAX_COMP(v) max(max(v.x, v.y), v.z)
 #define MIN_COMP(v) min(min(v.x, v.y), v.z)
 
-#define PICK_BY(choice, v1, v2) vec3(choice.x == 1 ? v1.x : v2.x, choice.y == 1 ? v1.y : v2.y, choice.z == 1 ? v1.z : v2.z)
+#define PICK_BY(choice, v1, v2) vec3(bool(choice & 0x100) ? v1.x : v2.x, bool(choice & 0x10) ? v1.y : v2.y, bool(choice & 0x1) ? v1.z : v2.z)
+#define TO_BITS(b1, b2, b3) (b1 ? 0x100 : 0) | (b2 ? 0x10 : 0) | (b3 ? 0x1 : 0)
 
 #define LEAF_MASK  uint(0x80000000)
 #define SOLID_MASK uint(0x40000000)
@@ -24,17 +25,17 @@ layout(std430, binding = 0) buffer octree {
 
 struct octreeNodeParser {
 	bool isGenerated, doneSearching;
-	int node;
+	uint node;
 	float sLMax, sUMin;
 	vec3 sMin, sMid, sMax;
 	vec3 xMin, xMid, xMax;
-	bvec3 childMask;
-	bvec3 lastMask;
-	bvec3 maskList[3];
-	int currentMask;
+	uint childMask;
+	uint lastMask;
+	uint maskList[3];
+	uint currentMask;
 };
 
-// octreeNodeParser nodeList[MAX_DEPTH];
+octreeNodeParser nodeList[MAX_DEPTH];
 
 // Nodes in the octree reference locations here for actual voxel data.
 // Actually a huge number of 8x8x8 voxel blocks, packed into a single texture.
@@ -108,13 +109,13 @@ vec4 cAlong(vec3 start, vec3 dir) {
 	// Search through the octree.
 	// Credit for algorithm: http://diglib.eg.org/EG/DL/WS/EGGH/EGGH89/061-073.pdf
 
-	octreeNodeParser nodeList[MAX_DEPTH];
+	// octreeNodeParser nodeList[MAX_DEPTH];
 
 	dir = normalize(dir);
 
 	vec3 dInv = 1 / dir;
 
-	ivec3 vMask = ivec3(dir.x > 0 ? 0 : 1, dir.y > 0 ? 0 : 1, dir.z > 0 ? 0 : 1);
+	int vMask = TO_BITS(dir.x <= 0, dir.y <= 0, dir.z <= 0);
 
 	nodeList[0].xMin = vec3(0, 0, 0);
 	nodeList[0].xMax = worldSize;
@@ -125,36 +126,36 @@ vec4 cAlong(vec3 start, vec3 dir) {
 	nodeList[0].doneSearching = false;
 
 	int i = 0;
-	// int maxSteps = 30;
+	int maxSteps = 30;
 	while (i >= 0) {//} && --maxSteps > 0) {
 		if (nodeList[i].doneSearching) i--;
 		else if (nodeList[i].isGenerated) {
 			/*
 			 * Find next intersecting node.
 			 */
-			ivec3 nextChildDisplacement = ivec3(nodeList[i].childMask) ^ vMask;
+			uint disp = nodeList[i].childMask ^ vMask;
 			if (nodeList[i].childMask == nodeList[i].lastMask) {
 				nodeList[i].doneSearching = true;
 			} else {
-				int max = 1;	// THIS DOES SOMETHING. I don't know what, but
-								// without it the program breaks...
-				while(any(nodeList[i].maskList[nodeList[i].currentMask] &&
-					nodeList[i].childMask) && bool(max)) // breaks here w/o check.
+				while(bool(nodeList[i].maskList[nodeList[i].currentMask] &
+					nodeList[i].childMask))
 					nodeList[i].currentMask++;
-				nodeList[i].childMask = nodeList[i].childMask ||
+				nodeList[i].childMask = nodeList[i].childMask |
 										nodeList[i].maskList[nodeList[i].currentMask];
 			}
+
+			// return vec4(PICK_BY(disp, vec3(1, 1, 1), vec3(0, 0, 0)), 1);
+
+
+			// return vec4(PICK_BY(nodeList[i].maskList[2], vec3(1, 1, 1), vec3(0, 0, 0)), 1);
 
 			/*
 			 * Prepare to search next intersecting node.
 			 */
-			int nextNode = nextChildDisplacement.x * 4 +
-						   nextChildDisplacement.y * 2 +
-						   nextChildDisplacement.z * 1 +
-						   int(nodes[nodeList[i].node].childData & CHILD_MASK);
+			uint nextNode = disp + (nodes[nodeList[i].node].childData & CHILD_MASK);
 			// Decide if node is a child or solid or neither.
 			if ((nodes[nextNode].childData & FINAL_MASK) == uint(0)) {
-				ivec3 disp = nextChildDisplacement;
+				// ivec3 disp = disp;
 				nodeList[i + 1].node = nextNode;
 				nodeList[i + 1].xMin = PICK_BY(disp, nodeList[i].xMid, nodeList[i].xMin);
 				nodeList[i + 1].xMax = PICK_BY(disp, nodeList[i].xMax, nodeList[i].xMid);
@@ -166,11 +167,12 @@ vec4 cAlong(vec3 start, vec3 dir) {
 			} else if ((nodes[nextNode].childData & SOLID_MASK) != 0)
 				continue;
 			else {	// LEAF NODE
-				return vec4(nextChildDisplacement, 1);
-				// // return vec4(1, 1, 1, 1);
+				// return vec4(disp, 1);
+				// return vec4(1, 1, 1, 1);
 				// while (nodeList[i].currentMask == 0)
 				// 	i--;
-				// return vec4(nodeList[i].maskList[nodeList[i].currentMask - 1], 1);
+				return vec4(float(i) / 20, float(i) / 20, float(i) / 20, 1);
+				// return vec4(PICK_BY(nodeList[i].maskList[nodeList[i].currentMask - 1], vec3(1, 1, 1), vec3(0, 0, 0)), 1);
 				// return colorAtBrickLoc(nodeBrick(nextNode));
 			}
 		} else {
@@ -192,21 +194,34 @@ vec4 cAlong(vec3 start, vec3 dir) {
 			bool a = nodeList[i].sMid.x < nodeList[i].sMid.y;
 			bool b = nodeList[i].sMid.x < nodeList[i].sMid.z;
 			bool c = nodeList[i].sMid.y < nodeList[i].sMid.z;
-			nodeList[i].maskList[0].x = a && b;
-			nodeList[i].maskList[0].y = !a && c;
-			nodeList[i].maskList[0].z = !(b || c);
-			nodeList[i].maskList[1].x = a != b;
-			nodeList[i].maskList[1].y = a == c;
-			nodeList[i].maskList[1].z = b != c;
-			nodeList[i].maskList[2].x = !(a || b);
-			nodeList[i].maskList[2].y = a && !c;
-			nodeList[i].maskList[2].z = b && c;
-			nodeList[i].childMask.x   = nodeList[i].sMid.x < nodeList[i].sLMax;
-			nodeList[i].childMask.y   = nodeList[i].sMid.y < nodeList[i].sLMax;
-			nodeList[i].childMask.z   = nodeList[i].sMid.z < nodeList[i].sLMax;
-			nodeList[i].lastMask.x    = nodeList[i].sMid.x < nodeList[i].sUMin;
-			nodeList[i].lastMask.y    = nodeList[i].sMid.y < nodeList[i].sUMin;
-			nodeList[i].lastMask.z    = nodeList[i].sMid.z < nodeList[i].sUMin;
+			// nodeList[i].maskList[0] = ((a & b) << 1 + (~a & c)) << 1 + (0x1 & ~(b | c));
+			nodeList[i].maskList[0] = TO_BITS(a && b, !a && c, !(b || c)) ;
+			// nodeList[i].maskList[0].x = a && b;
+			// nodeList[i].maskList[0].y = !a && c;
+			// nodeList[i].maskList[0].z = !(b || c);
+			// nodeList[i].maskList[1] = ((a ^ b) << 1 + int(a == c)) << 1 + b ^ c;
+			nodeList[i].maskList[1] = TO_BITS(a != b, a == c, b != c);
+			// nodeList[i].maskList[1].x = a != b;
+			// nodeList[i].maskList[1].y = a == c;
+			// nodeList[i].maskList[1].z = b != c;
+			// nodeList[i].maskList[2] = ((0x1 & ~(a | b)) << 1 + ~c & a) << 1 + b & c;
+			nodeList[i].maskList[2] = 0x111 & (~nodeList[i].maskList[0])
+											& (~nodeList[i].maskList[1]);
+			// nodeList[i].maskList[2].x = !(a || b);
+			// nodeList[i].maskList[2].y = a && !c;
+			// nodeList[i].maskList[2].z = b && c;
+			nodeList[i].childMask = TO_BITS(nodeList[i].sMid.x < nodeList[i].sLMax,
+											nodeList[i].sMid.y < nodeList[i].sLMax,
+											nodeList[i].sMid.z < nodeList[i].sLMax);
+			// nodeList[i].childMask.x   = nodeList[i].sMid.x < nodeList[i].sLMax;
+			// nodeList[i].childMask.y   = nodeList[i].sMid.y < nodeList[i].sLMax;
+			// nodeList[i].childMask.z   = nodeList[i].sMid.z < nodeList[i].sLMax;
+			nodeList[i].lastMask  = TO_BITS(nodeList[i].sMid.x < nodeList[i].sUMin,
+											nodeList[i].sMid.y < nodeList[i].sUMin,
+											nodeList[i].sMid.z < nodeList[i].sUMin);
+			// nodeList[i].lastMask.x    = nodeList[i].sMid.x < nodeList[i].sUMin;
+			// nodeList[i].lastMask.y    = nodeList[i].sMid.y < nodeList[i].sUMin;
+			// nodeList[i].lastMask.z    = nodeList[i].sMid.z < nodeList[i].sUMin;
 			nodeList[i].currentMask   = 0;
 			nodeList[i].isGenerated   = true;
 		}

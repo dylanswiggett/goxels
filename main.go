@@ -35,7 +35,7 @@ func InitGL() {
 
 func main() {
 	fmt.Println("Generating simple test octree...")
-	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 5)
+	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 6)
 	data := 0
 	for x := float32(0); x <= 10.0; x += .01 {
 		for y := float32(0); y <= 10.0; y+= .01 {
@@ -166,13 +166,16 @@ func main() {
 	/* HANDLE OPENGL RENDERING */
 
 	ticks := 2000
+	startTime := time.Now().UnixNano()
 	running := true
 	for running {
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(30 * time.Millisecond)
 		ticks += 1
 
-		if ticks % 100 == 0 {
-			fmt.Println("100 ticks!")
+		if ticks % 20 == 0 {
+			seconds := time.Now().UnixNano() - startTime;
+			fmt.Println("20 ticks at", float32(20.0 * 1e9) / float32(seconds), "FPS.");
+			startTime = time.Now().UnixNano()
 		}
 
 		/* HANDLE UI INTERACTIONS */
