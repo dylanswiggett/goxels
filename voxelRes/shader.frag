@@ -58,8 +58,10 @@ vec4 cAlong(vec3 start, vec3 dir) {
 	// Search through the octree.
 	dir = normalize(dir);
 	vec3 dInv = 1 / dir;
+	vec3 deltaT = abs(dInv);
 
 	ivec3 vMask = ivec3(INT(dir.x <= 0), INT(dir.y <= 0), INT(dir.z <= 0));
+	ivec3 stepDir = ivec3(sign(dir));
 
 	vec3 xMin = vec3(0, 0, 0);
 	vec3 xMax = worldSize;
@@ -92,22 +94,55 @@ vec4 cAlong(vec3 start, vec3 dir) {
 	int maxSteps = 200;
 	while (--maxSteps > 0) {
 		if ((nodes[nextNode].childData & FINAL_MASK) != 0) {
+			vec3 nextXMax = nextXMin + dim;
+			sMin = (nextXMin - start) * dInv;
+			sMax = (nextXMax - start) * dInv;
+
 			if ((nodes[nextNode].childData & SOLID_MASK) == 0) {
 				/*
 				 * Look at a leaf node.
 				 */
 
-				c += vec4(nextXMin / 10.0, 0) * (1.0 - c.a);// * float(maxSteps) / 100.0;
-				c.a += .2;
+				sLMax = MAX_COMP(PICK_BY(vMask, sMax, sMin));
+				pos = start + dir * (sLMax + .0001) - nextXMin;
+
+				vec3 fLinePos = pos * 8 / dim;
+				ivec3 linePos = ivec3(fLinePos);
+				vec3 stepTmax = (vec3(linePos + stepDir) - fLinePos) * dInv;
+				int max = 20;
+
+				ivec3 brickLoc = nodeBrick(nextNode);
+
+				while (max-- > 0) {
+					vec4 checkColor = colorAtBrickLoc(brickLoc + linePos);
+					if (checkColor != vec4(0, 0, 0, 0))
+						return checkColor;
+					if (stepTmax.x < stepTmax.y && stepTmax.x < stepTmax.z) {
+							linePos.x += stepDir.x;
+							if (linePos.x < 0 || linePos.x >= 8)
+								break;
+							stepTmax.x += deltaT.x;
+					} else if (stepTmax.y < stepTmax.z) {
+							linePos.y += stepDir.y;
+							if (linePos.y < 0 || linePos.y >= 8)
+								break;
+							stepTmax.y += deltaT.y;
+					} else {
+							linePos.z += stepDir.z;
+							if (linePos.z < 0 || linePos.z >= 8)
+								break;
+							stepTmax.z += deltaT.z;
+					}
+				}
+
+				// c += vec4(nextXMin / 10.0, 0) * (1.0 - c.a);// * float(maxSteps) / 100.0;
+				// c.a += .2;
 				if (c.a >= 1)
 					return c;
 			}
 			/*
 			 * Prepare for next node to check.
 			 */
-			vec3 nextXMax = nextXMin + dim;
-			sMin = (nextXMin - start) * dInv;
-			sMax = (nextXMax - start) * dInv;
 			sUMin = MIN_COMP(PICK_BY(vMask, sMin, sMax));
 
 			nextXMin = xMin;
