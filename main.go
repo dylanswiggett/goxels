@@ -8,10 +8,12 @@ import(
 	"fmt"
 	"time"
 	"math"
+	"runtime"
 )
 
 const (
 	SSBO_BINDING     = 1 	// Must line up with the # in voxelRes/shader.frag
+	MAX_OCTREE_NODES = 1000000
 )
 
 var WindowW, WindowH = 1200, 800
@@ -28,6 +30,7 @@ var (
 	shader gl.Program
 	octreeData, brickData []uint32
 	brickDim int
+	octreeDataList *[MAX_OCTREE_NODES]uint32
 )
 
 type TestBlock struct {
@@ -41,7 +44,7 @@ func InitGL() {
 
 func main() {
 	fmt.Println("Generating simple test octree...")
-	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 5)
+	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 6)
 	data := 0
 	for x := float32(0); x <= 10.0; x += .05 {
 		for y := float32(0); y <= 10.0; y+= .05 {
@@ -51,7 +54,7 @@ func main() {
 			// 	tree.AddVoxel(&testVoxel, V3(x, y, x + z))
 			// }
 			testVoxel := NewVoxel(x / 10.0, y / 10.0, 0, 1, V3(1, 0, 0))
-			tree.AddVoxel(&testVoxel, V3(x, y, (y / float32(math.Sqrt(float64(x + 1)))) / 2.0))
+			tree.AddVoxel(&testVoxel, V3(x, y, float32(math.Sqrt(math.Pow(float64(x - 5.0), 2) + math.Pow(float64(y - 5.0), 2)))))
 			data++
 		}
 	}
@@ -118,7 +121,6 @@ func main() {
 
 	shader = createShader("voxelRes/shader.vert",
 		"voxelRes/shader.frag")
-	// shader.Use()
 
 	cameraPosition = glam.Vec3{-1, 0, 0}
 	forwardDirection = glam.Vec3{1, 0, 0}
@@ -126,6 +128,7 @@ func main() {
 	upDirection = glam.Vec3{0, 1, 0}
 
 	bricks = gl.GenTexture()
+	defer bricks.Delete()
 	bricks.Bind(gl.TEXTURE_3D)
 	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
@@ -136,18 +139,22 @@ func main() {
 
 	shader.Use()
 
+	// Make the octree buffer
 	octreeBuffer = gl.GenBuffer()
+	defer octreeBuffer.Delete()
 	octreeBuffer.Bind(gl.SHADER_STORAGE_BUFFER)
-	octreeBuffer.BindBufferRange(gl.SHADER_STORAGE_BUFFER, SSBO_BINDING, 0, uint(len(octreeData) * 4))
-	gl.BufferData(gl.SHADER_STORAGE_BUFFER, len(octreeData) * 4, octreeData, gl.DYNAMIC_DRAW)
-	octreeIndex = shader.GetProgramResourceIndex(gl.SHADER_STORAGE_BLOCK, "octree")
-	if octreeIndex != gl.NO_ERROR {
-		fmt.Println("Failed to allocate GPU buffer for octree data. Exiting.")
-		panic(1)
+	gl.BufferData(gl.SHADER_STORAGE_BUFFER, len(octreeData) * 4, nil, gl.STATIC_DRAW)
+	
+	// Fill the octree buffer
+	octreeDataPointer := gl.MapBuffer(gl.SHADER_STORAGE_BUFFER, gl.WRITE_ONLY)
+	octreeDataList = (*[MAX_OCTREE_NODES]uint32)(octreeDataPointer)
+	for i, dataPoint := range(octreeData) {
+		octreeDataList[i] = dataPoint
 	}
-	shader.ShaderStorageBlockBinding(octreeIndex, SSBO_BINDING)
-	gl.MemoryBarrier(gl.SHADER_STORAGE_BARRIER_BIT)
-	octreeBuffer.Unbind(gl.SHADER_STORAGE_BUFFER)
+	gl.UnmapBuffer(gl.SHADER_STORAGE_BUFFER)
+
+	// Tell the shader where the octree buffer is
+	octreeBuffer.BindBufferBase(gl.SHADER_STORAGE_BUFFER, SSBO_BINDING)
 
 	shader.GetUniformLocation("worldSize").Uniform3f(10.0, 10.0, 10.0)
 	shader.GetUniformLocation("worldVoxelSize").Uniform1i(
@@ -176,6 +183,8 @@ func main() {
 	running := true
 	for running {
 		time.Sleep(10 * time.Millisecond)
+		// For some reason, Cgo occasionally segfaults w/o this lock.
+		runtime.LockOSThread()
 		ticks += 1
 
 		if ticks % 20 == 0 {
@@ -233,6 +242,7 @@ func main() {
 		plane.Draw()
 
 		glfw.SwapBuffers()
+		runtime.UnlockOSThread()
 	}
 
 }
