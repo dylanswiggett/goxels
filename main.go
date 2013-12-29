@@ -35,10 +35,10 @@ func InitGL() {
 
 func main() {
 	fmt.Println("Generating simple test octree...")
-	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 6)
+	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 7)
 	data := 0
-	for x := float32(0); x <= 10.0; x += .01 {
-		for y := float32(0); y <= 10.0; y+= .01 {
+	for x := float32(0); x <= 10.0; x += .05 {
+		for y := float32(0); y <= 10.0; y+= .05 {
 			// for z := float32(0); float64(z) < math.Sin(float64(x)) + 2.0 && x + z <= 10.0; z+= 0.1 {
 			// 	data++
 			// 	testVoxel := NewVoxel(0, float32(int(x * 1000) % 100) / 100.0, 0, 1, V3(1, 0, 0))
@@ -137,7 +137,7 @@ func main() {
 
 	octreeBuffer := gl.GenBuffer()
 	octreeBuffer.Bind(gl.SHADER_STORAGE_BUFFER)
-	octreeBuffer.BindBufferRange(gl.SHADER_STORAGE_BUFFER, SSBO_BINDING, 0, uint(len(octreeData) * 4))
+	octreeBuffer.BindBufferRange(gl.SHADER_STORAGE_BUFFER, 0, 0, uint(len(octreeData) * 4))
 	gl.BufferData(gl.SHADER_STORAGE_BUFFER, len(octreeData) * 4, shaderOctreeData, gl.STATIC_DRAW)
 	octreeIndex := shader.GetProgramResourceIndex(gl.SHADER_STORAGE_BLOCK, "octree")
 	if octreeIndex == gl.INVALID_INDEX {
@@ -146,10 +146,12 @@ func main() {
 	}
 	shader.ShaderStorageBlockBinding(octreeIndex, SSBO_BINDING)
 	gl.MemoryBarrier(gl.SHADER_STORAGE_BARRIER_BIT)
+	octreeBuffer.Unbind(gl.SHADER_STORAGE_BUFFER)
 
 	shader.GetUniformLocation("worldSize").Uniform3f(10.0, 10.0, 10.0)
 	shader.GetUniformLocation("worldVoxelSize").Uniform1i(
 		int(math.Pow(2, float64(tree.MaxSubdiv))) * BRICK_SIZE);
+	shader.GetUniformLocation("numNodes").Uniform1i(len(octreeData) / 2);
 
 	camera = MakeCamera()
 	camera.SetOrthographic(1)
@@ -169,7 +171,7 @@ func main() {
 	startTime := time.Now().UnixNano()
 	running := true
 	for running {
-		time.Sleep(30 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		ticks += 1
 
 		if ticks % 20 == 0 {

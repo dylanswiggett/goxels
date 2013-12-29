@@ -3,8 +3,9 @@
 #define MAX_COMP(v) max(max(v.x, v.y), v.z)
 #define MIN_COMP(v) min(min(v.x, v.y), v.z)
 
-#define PICK_BY(choice, v1, v2) vec3(bool(choice & 0x100) ? v1.x : v2.x, bool(choice & 0x10) ? v1.y : v2.y, bool(choice & 0x1) ? v1.z : v2.z)
-#define TO_BITS(b1, b2, b3) (b1 ? 0x100 : 0) | (b2 ? 0x10 : 0) | (b3 ? 0x1 : 0)
+#define INT(b) (b ? 1 : 0)
+
+#define PICK_BY(choice, v1, v2) vec3((choice.x != 0) ? v1.x : v2.x, (choice.y != 0) ? v1.y : v2.y, (choice.z != 0) ? v1.z : v2.z)
 
 #define LEAF_MASK  uint(0x80000000)
 #define SOLID_MASK uint(0x40000000)
@@ -23,25 +24,13 @@ layout(std430, binding = 0) buffer octree {
 	octreeNode nodes [];
 };
 
-struct octreeNodeParser {
-	bool isGenerated, doneSearching;
-	uint node;
-	float sLMax, sUMin;
-	vec3 sMin, sMid, sMax;
-	vec3 xMin, xMid, xMax;
-	uint childMask;
-	uint lastMask;
-	uint maskList[3];
-	uint currentMask;
-};
-
-octreeNodeParser nodeList[MAX_DEPTH];
-
 // Nodes in the octree reference locations here for actual voxel data.
 // Actually a huge number of 8x8x8 voxel blocks, packed into a single texture.
 uniform sampler3D voxelBlocks;
 uniform vec3 worldSize;
 uniform int worldVoxelSize;
+
+uniform int numNodes;
 
 out vec3 color;
 
@@ -106,127 +95,108 @@ vec4 colorAtIntegerLoc(ivec3 pos) {
 }
 
 vec4 cAlong(vec3 start, vec3 dir) {
+	vec4 c = vec4(0, 0, 0, 0);
+	// return c;
+
 	// Search through the octree.
-	// Credit for algorithm: http://diglib.eg.org/EG/DL/WS/EGGH/EGGH89/061-073.pdf
 
 	// octreeNodeParser nodeList[MAX_DEPTH];
-
 	dir = normalize(dir);
 
 	vec3 dInv = 1 / dir;
 
-	int vMask = TO_BITS(dir.x <= 0, dir.y <= 0, dir.z <= 0);
+	// int vMask = TO_BITS(dir.x <= 0, dir.y <= 0, dir.z <= 0);
+	ivec3 vMask = ivec3(INT(dir.x <= 0), INT(dir.y <= 0), INT(dir.z <= 0));
 
-	nodeList[0].xMin = vec3(0, 0, 0);
-	nodeList[0].xMax = worldSize;
-	nodeList[0].sMin = (nodeList[0].xMin - start) * dInv;
-	nodeList[0].sMax = (nodeList[0].xMax - start) * dInv;
-	nodeList[0].node = 0;
-	nodeList[0].isGenerated = false;
-	nodeList[0].doneSearching = false;
+	vec3 xMin = vec3(0, 0, 0);
+	vec3 xMax = worldSize;
+	vec3 sMin = (xMin - start) * dInv;
+	vec3 sMax = (xMax - start) * dInv;
 
-	int i = 0;
-	int maxSteps = 30;
-	while (i >= 0) {//} && --maxSteps > 0) {
-		if (nodeList[i].doneSearching) i--;
-		else if (nodeList[i].isGenerated) {
-			/*
-			 * Find next intersecting node.
-			 */
-			uint disp = nodeList[i].childMask ^ vMask;
-			if (nodeList[i].childMask == nodeList[i].lastMask) {
-				nodeList[i].doneSearching = true;
-			} else {
-				while(bool(nodeList[i].maskList[nodeList[i].currentMask] &
-					nodeList[i].childMask))
-					nodeList[i].currentMask++;
-				nodeList[i].childMask = nodeList[i].childMask |
-										nodeList[i].maskList[nodeList[i].currentMask];
+	vec3 lowerLimits = PICK_BY(vMask, sMax, sMin);
+	vec3 upperLimits = PICK_BY(vMask, sMin, sMax);
+	float sLMax = MAX_COMP(lowerLimits);
+	float sUMin = MIN_COMP(upperLimits);
+
+	if (sLMax >= sUMin || sUMin < 0)
+		return vec4(0, 0, 0, 1);
+
+	if (sLMax < 0)
+		sLMax = 0;
+
+	// Keeps track of current position when raymarching.
+	vec3 pos = start + dir * (sLMax + .001);
+	vec3 dim = xMax;
+
+	ivec3 subNodeLoc;
+
+	vec3 nextXMin = xMin;
+	// XMax will always be xMin + dim, so we don't need a separate var.
+
+	uint node = 0;
+	uint nextNode = node;
+	int depth = 0;
+	int maxSteps = 200;
+	while (--maxSteps > 0) {
+		// if (nextNode < 0 || nextNode >= numNodes)
+		// 	return vec4(1, 0, 0, 1)
+		if ((nodes[nextNode].childData & FINAL_MASK) != 0) {
+			if ((nodes[nextNode].childData & SOLID_MASK) == 0) {
+				/*
+				 * Look at a leaf node.
+				 */
+				// return vec4(pos, 1);
+				c += vec4(1, 1, 1, 1) * .1;// * float(maxSteps) / 100.0;
+				if (c.a >= 1)
+					return c;
 			}
-
-			// return vec4(PICK_BY(disp, vec3(1, 1, 1), vec3(0, 0, 0)), 1);
-
-
-			// return vec4(PICK_BY(nodeList[i].maskList[2], vec3(1, 1, 1), vec3(0, 0, 0)), 1);
-
 			/*
-			 * Prepare to search next intersecting node.
+			 * Prepare for next node to check.
 			 */
-			uint nextNode = disp + (nodes[nodeList[i].node].childData & CHILD_MASK);
-			// Decide if node is a child or solid or neither.
-			if ((nodes[nextNode].childData & FINAL_MASK) == uint(0)) {
-				// ivec3 disp = disp;
-				nodeList[i + 1].node = nextNode;
-				nodeList[i + 1].xMin = PICK_BY(disp, nodeList[i].xMid, nodeList[i].xMin);
-				nodeList[i + 1].xMax = PICK_BY(disp, nodeList[i].xMax, nodeList[i].xMid);
-				nodeList[i + 1].sMin = PICK_BY(disp, nodeList[i].sMid, nodeList[i].sMin);
-				nodeList[i + 1].sMax = PICK_BY(disp, nodeList[i].sMax, nodeList[i].sMid);
-				nodeList[i + 1].isGenerated = false;
-				nodeList[i + 1].doneSearching = false;
-				i++;
-			} else if ((nodes[nextNode].childData & SOLID_MASK) != 0)
-				continue;
-			else {	// LEAF NODE
-				// return vec4(disp, 1);
-				// return vec4(1, 1, 1, 1);
-				// while (nodeList[i].currentMask == 0)
-				// 	i--;
-				return vec4(float(i) / 20, float(i) / 20, float(i) / 20, 1);
-				// return vec4(PICK_BY(nodeList[i].maskList[nodeList[i].currentMask - 1], vec3(1, 1, 1), vec3(0, 0, 0)), 1);
-				// return colorAtBrickLoc(nodeBrick(nextNode));
-			}
+			vec3 nextXMax = nextXMin + dim;
+			sMin = (nextXMin - start) * dInv;
+			sMax = (nextXMax - start) * dInv;
+			sUMin = MIN_COMP(PICK_BY(vMask, sMin, sMax));
+
+			nextXMin = xMin;
+			nextNode = node;
+			pos = start + dir * (sUMin + .0001);
+			dim *= 2;
+			depth--;
+			// return vec4(nextPos / 20, 1);	// For pretty colors!
 		} else {
 			/*
-			 * Generate data for a new node.
+			 * Parse down to find a leaf node (or empty node)
 			 */
-			nodeList[i].xMid = (nodeList[i].xMin + nodeList[i].xMax) / 2;
-			nodeList[i].sMid = (nodeList[i].xMid - start) * dInv;
-			vec3 lowerLimits = PICK_BY(vMask, nodeList[i].sMax, nodeList[i].sMin);
-			vec3 upperLimits = PICK_BY(vMask, nodeList[i].sMin, nodeList[i].sMax);
-			nodeList[i].sLMax = MAX_COMP(lowerLimits);
-			nodeList[i].sUMin = MIN_COMP(upperLimits);
-			if (nodeList[i].sLMax >= nodeList[i].sUMin || nodeList[i].sUMin < 0) {
-				i--;
-				continue;
-			}
+			node = nextNode;
+			xMin = nextXMin;
 
-			// Generate masks.
-			bool a = nodeList[i].sMid.x < nodeList[i].sMid.y;
-			bool b = nodeList[i].sMid.x < nodeList[i].sMid.z;
-			bool c = nodeList[i].sMid.y < nodeList[i].sMid.z;
-			// nodeList[i].maskList[0] = ((a & b) << 1 + (~a & c)) << 1 + (0x1 & ~(b | c));
-			nodeList[i].maskList[0] = TO_BITS(a && b, !a && c, !(b || c)) ;
-			// nodeList[i].maskList[0].x = a && b;
-			// nodeList[i].maskList[0].y = !a && c;
-			// nodeList[i].maskList[0].z = !(b || c);
-			// nodeList[i].maskList[1] = ((a ^ b) << 1 + int(a == c)) << 1 + b ^ c;
-			nodeList[i].maskList[1] = TO_BITS(a != b, a == c, b != c);
-			// nodeList[i].maskList[1].x = a != b;
-			// nodeList[i].maskList[1].y = a == c;
-			// nodeList[i].maskList[1].z = b != c;
-			// nodeList[i].maskList[2] = ((0x1 & ~(a | b)) << 1 + ~c & a) << 1 + b & c;
-			nodeList[i].maskList[2] = 0x111 & (~nodeList[i].maskList[0])
-											& (~nodeList[i].maskList[1]);
-			// nodeList[i].maskList[2].x = !(a || b);
-			// nodeList[i].maskList[2].y = a && !c;
-			// nodeList[i].maskList[2].z = b && c;
-			nodeList[i].childMask = TO_BITS(nodeList[i].sMid.x < nodeList[i].sLMax,
-											nodeList[i].sMid.y < nodeList[i].sLMax,
-											nodeList[i].sMid.z < nodeList[i].sLMax);
-			// nodeList[i].childMask.x   = nodeList[i].sMid.x < nodeList[i].sLMax;
-			// nodeList[i].childMask.y   = nodeList[i].sMid.y < nodeList[i].sLMax;
-			// nodeList[i].childMask.z   = nodeList[i].sMid.z < nodeList[i].sLMax;
-			nodeList[i].lastMask  = TO_BITS(nodeList[i].sMid.x < nodeList[i].sUMin,
-											nodeList[i].sMid.y < nodeList[i].sUMin,
-											nodeList[i].sMid.z < nodeList[i].sUMin);
-			// nodeList[i].lastMask.x    = nodeList[i].sMid.x < nodeList[i].sUMin;
-			// nodeList[i].lastMask.y    = nodeList[i].sMid.y < nodeList[i].sUMin;
-			// nodeList[i].lastMask.z    = nodeList[i].sMid.z < nodeList[i].sUMin;
-			nodeList[i].currentMask   = 0;
-			nodeList[i].isGenerated   = true;
+			dim /= 2;
+			subNodeLoc = ivec3(floor((pos - xMin) / dim));
+			if (subNodeLoc.x < 0 || subNodeLoc.x > 1 ||
+				subNodeLoc.y < 0 || subNodeLoc.y > 1 ||
+				subNodeLoc.z < 0 || subNodeLoc.z > 1) {
+				/*
+				 * In this case we either need to exit our search,
+				 * or restart from the root node.
+				 */
+				if (depth == 0) {
+					return c;
+			 	} else {
+			 		nextXMin = vec3(0, 0, 0);
+			 		dim = worldSize;
+			 		nextNode = 0;
+			 		depth = 0;
+			 	}
+			} else {
+				nextXMin = xMin + dim * subNodeLoc;
+				nextNode = (nodes[node].childData & CHILD_MASK)
+					+ (subNodeLoc.x << 2) + (subNodeLoc.y << 1) + subNodeLoc.z;
+				depth++;
+			}
 		}
 	}
-	return vec4(0, 0, 0, 1);
+	return c;
 }
 
 void main(){
@@ -235,16 +205,5 @@ void main(){
 	float yDisp = (gl_FragCoord.y - float(heightPix) / 2) / heightPix;
 	vec3 cDir = cameraForwards + xDisp * cameraRight - yDisp * cameraUp;
 	color = cAlong(cameraPos, cDir).rgb;
-	vec3 colorThere = colorAtLoc(vec3(1, 1, 1)).rgb;	// REMOVE
-	// float i;
-	// for (i = 0; i < 20; i += .1) {
-	// 	vec3 dir = cameraPos + cDir * i;
-	// 	if (dir.x > 0 && dir.x < 10 && dir.y > 0 && dir.y < 10 && dir.z > 0 && dir.z < 10) {
-	// 		vec3 colorThere = colorAtLoc(dir).rgb;
-	// 	// 	if (!(colorThere.r == 0 && colorThere.g == 0 && colorThere.b == 0)) {
-	// 	// 		// color = colorThere;
-	// 	// 		break;
-	// 	// 	} 
-	// 	}
-	// }
+	vec3 colorThere = colorAtLoc(vec3(1, 1, 1)).rgb;	// TO PREVENT STARTUP ERROR (FOR NOW)
 }
