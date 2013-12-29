@@ -1,7 +1,7 @@
 package main
 
 import(
-	"github.com/banthar/Go-SDL/sdl"
+	"github.com/go-gl/glfw"
 	"github.com/hishboy/gocommons/lang"
 	"github.com/dylanswiggett/gl"
 	"github.com/drakmaniso/glam"
@@ -45,14 +45,14 @@ func main() {
 	data := 0
 	for x := float32(0); x <= 10.0; x += .05 {
 		for y := float32(0); y <= 10.0; y+= .05 {
-			for z := float32(0); float64(z) < math.Sin(float64(x)) + 2.0 && x + z <= 10.0; z+= 0.1 {
-				data++
-				testVoxel := NewVoxel(0, float32(int(x * 1000) % 100) / 100.0, 0, 1, V3(1, 0, 0))
-				tree.AddVoxel(&testVoxel, V3(x, y, x + z))
-			}
-			// testVoxel := NewVoxel(x / 10.0, y / 10.0, 0, 1, V3(1, 0, 0))
-			// tree.AddVoxel(&testVoxel, V3(x, y, (y / float32(math.Sqrt(float64(x + 1)))) / 2.0))
-			// data++
+			// for z := float32(0); float64(z) < math.Sin(float64(x)) + 2.0 && x + z <= 10.0; z+= 0.1 {
+			// 	data++
+			// 	testVoxel := NewVoxel(0, float32(int(x * 1000) % 100) / 100.0, 0, 1, V3(1, 0, 0))
+			// 	tree.AddVoxel(&testVoxel, V3(x, y, x + z))
+			// }
+			testVoxel := NewVoxel(x / 10.0, y / 10.0, 0, 1, V3(1, 0, 0))
+			tree.AddVoxel(&testVoxel, V3(x, y, (y / float32(math.Sqrt(float64(x + 1)))) / 2.0))
+			data++
 		}
 	}
 	fmt.Println("Called AddVoxel", data, "times.")
@@ -100,14 +100,14 @@ func main() {
 	}
 
 	fmt.Println("Initializing rendering...")
-	if sdl.Init(sdl.INIT_EVERYTHING) != 0 {
-		panic(sdl.GetError())
-	}
-	defer sdl.Quit()
+	glfw.Init()
+	defer glfw.Terminate()
 
-	if sdl.SetVideoMode(WindowW, WindowH, 32, sdl.OPENGL) == nil {
-		panic("sdl error")
-	}
+	glfw.OpenWindow(WindowW, WindowH, 8, 8, 8, 8, 0, 0, glfw.Windowed)
+
+	glfw.Disable(glfw.MouseCursor)
+	defer glfw.Enable(glfw.MouseCursor)
+	glfw.SetMousePos(WindowW / 2, WindowH / 2)
 
 	if err := gl.Init(); int(err) != 0 {
 		panic(err)
@@ -160,10 +160,6 @@ func main() {
 	camera.SetVPName("VP")
 	camera.SetView(cameraPosition, forwardDirection, upDirection)
 
-	sdl.WarpMouse(WindowW / 2, WindowH / 2)
-	for ev := sdl.PollEvent(); ev != nil; ev = sdl.PollEvent() {
-	}
-
 	plane := LoadModel("voxelRes/models/plane.obj")
 	
 	/* HANDLE OPENGL RENDERING */
@@ -190,45 +186,35 @@ func main() {
 
 		/* HANDLE UI INTERACTIONS */
 
-		for ev := sdl.PollEvent(); ev != nil; ev = sdl.PollEvent() {
+		mX, mY := glfw.MousePos()
+		mX -= WindowW / 2
+		mY -= WindowH / 2
+		glfw.SetMousePos(WindowW / 2, WindowH / 2)
+		if (mX != 0 || mY != 0) {
+			hRot := glam.Rotation(.001 * float32(mX), upDirection)
+			forwardDirection = VecTimesMat(forwardDirection, hRot)
+			rightDirection = VecTimesMat(rightDirection, hRot)
 
-			switch e := ev.(type){
-			case *sdl.QuitEvent:
-				running = false
-			case *sdl.MouseButtonEvent:
-				if e.Type == sdl.MOUSEBUTTONDOWN {
-					fmt.Println("Click!")
-				}
-			case *sdl.MouseMotionEvent:
-				if e.State == 1 {
-					hRot := glam.Rotation(.001 * float32(e.Xrel), upDirection)
-					forwardDirection = VecTimesMat(forwardDirection, hRot)
-					rightDirection = VecTimesMat(rightDirection, hRot)
-
-					vRot := glam.Rotation(-.001 * float32(e.Yrel), rightDirection)
-					forwardDirection = VecTimesMat(forwardDirection, vRot)
-					upDirection = VecTimesMat(upDirection, vRot)
-					// forwardDirection = forwardDirection.Plus(upDirection.Times(float32(e.Yrel) * .01))
-				}
-			case *sdl.KeyboardEvent:
-				if e.Keysym.Sym == sdl.K_ESCAPE || e.Keysym.Sym == sdl.K_q{
-					running = false
-				}
-			default:
-				break
-			}
+			vRot := glam.Rotation(-.001 * float32(mY), rightDirection)
+			forwardDirection = VecTimesMat(forwardDirection, vRot)
+			upDirection = VecTimesMat(upDirection, vRot)
 		}
 
-		if sdl.GetKeyState()[sdl.K_a] == 1 {
+		if (glfw.Key(glfw.KeyEsc) == glfw.KeyPress) ||
+		   (glfw.Key(81) == glfw.KeyPress) {	//q
+			running = false
+		}
+
+		if glfw.Key(65) == glfw.KeyPress {	//a
 			cameraPosition = cameraPosition.Plus(rightDirection.Times(-.5))
 		}
-		if sdl.GetKeyState()[sdl.K_d] == 1 {
+		if glfw.Key(68) == glfw.KeyPress {	//d
 			cameraPosition = cameraPosition.Plus(rightDirection.Times(.5))
 		}
-		if sdl.GetKeyState()[sdl.K_w] == 1 {
+		if glfw.Key(87) == glfw.KeyPress {	//w
 			cameraPosition = cameraPosition.Plus(forwardDirection.Times(.5))
 		}
-		if sdl.GetKeyState()[sdl.K_s] == 1 {
+		if glfw.Key(83) == glfw.KeyPress {	//s
 			cameraPosition = cameraPosition.Plus(forwardDirection.Times(-.5))
 		}
 
@@ -246,7 +232,7 @@ func main() {
 		camera.Prepare(shader, Scale(glam.Vec3{0,float32(WindowH) / float32(WindowW), 1}))
 		plane.Draw()
 
-		sdl.GL_SwapBuffers()
+		glfw.SwapBuffers()
 	}
 
 }
