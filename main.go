@@ -11,7 +11,7 @@ import(
 )
 
 const (
-	SSBO_BINDING     = 0 	// Must line up with the # in voxelRes/shader.frag
+	SSBO_BINDING     = 1 	// Must line up with the # in voxelRes/shader.frag
 )
 
 var WindowW, WindowH = 1200, 800
@@ -20,38 +20,44 @@ var camera *Camera
 
 var cameraPosition, forwardDirection, rightDirection, upDirection glam.Vec3
 
+var (
+	shaderOctreeData []int32
+	bricks gl.Texture
+	octreeBuffer gl.Buffer
+	octreeIndex gl.ProgramResourceIndex
+	shader gl.Program
+	octreeData, brickData []uint32
+	brickDim int
+)
+
 type TestBlock struct {
 	test1 int
 	test2 int
 }
 
 func InitGL() {
-	gl.ClearColor(1, 1, 1, 0)
-	gl.Enable(gl.DEPTH_TEST)
-	gl.DepthFunc(gl.LESS)
-	gl.Enable(gl.LINE_SMOOTH)
 	gl.Enable(gl.TEXTURE_3D)
 }
 
 func main() {
 	fmt.Println("Generating simple test octree...")
-	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 7)
+	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 5)
 	data := 0
 	for x := float32(0); x <= 10.0; x += .05 {
 		for y := float32(0); y <= 10.0; y+= .05 {
-			// for z := float32(0); float64(z) < math.Sin(float64(x)) + 2.0 && x + z <= 10.0; z+= 0.1 {
-			// 	data++
-			// 	testVoxel := NewVoxel(0, float32(int(x * 1000) % 100) / 100.0, 0, 1, V3(1, 0, 0))
-			// 	tree.AddVoxel(&testVoxel, V3(x, y, x + z))
-			// }
-			testVoxel := NewVoxel(x / 10.0, y / 10.0, 0, 1, V3(1, 0, 0))
-			tree.AddVoxel(&testVoxel, V3(x, y, (y * y / (x + 1)) / 10.0))
-			data++
+			for z := float32(0); float64(z) < math.Sin(float64(x)) + 2.0 && x + z <= 10.0; z+= 0.1 {
+				data++
+				testVoxel := NewVoxel(0, float32(int(x * 1000) % 100) / 100.0, 0, 1, V3(1, 0, 0))
+				tree.AddVoxel(&testVoxel, V3(x, y, x + z))
+			}
+			// testVoxel := NewVoxel(x / 10.0, y / 10.0, 0, 1, V3(1, 0, 0))
+			// tree.AddVoxel(&testVoxel, V3(x, y, (y / float32(math.Sqrt(float64(x + 1)))) / 2.0))
+			// data++
 		}
 	}
 	fmt.Println("Called AddVoxel", data, "times.")
 	tree.BuildTree()
-	octreeData, brickData, brickDim := tree.BuildGPURepresentation()
+	octreeData, brickData, brickDim = tree.BuildGPURepresentation()
 
 	/*
 	 * A few tests to confirm octree integrity.
@@ -110,7 +116,7 @@ func main() {
 	InitGL()
 	EnableModelRendering()
 
-	shader := createShader("voxelRes/shader.vert",
+	shader = createShader("voxelRes/shader.vert",
 		"voxelRes/shader.frag")
 	// shader.Use()
 
@@ -119,7 +125,7 @@ func main() {
 	rightDirection = glam.Vec3{0, 0, 1}
 	upDirection = glam.Vec3{0, 1, 0}
 
-	bricks := gl.GenTexture()
+	bricks = gl.GenTexture()
 	bricks.Bind(gl.TEXTURE_3D)
 	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
@@ -130,17 +136,12 @@ func main() {
 
 	shader.Use()
 
-	shaderOctreeData := make([]int32, len(octreeData))
-	for i, data := range(octreeData) {
-		shaderOctreeData[i] = int32(data)
-	}
-
-	octreeBuffer := gl.GenBuffer()
+	octreeBuffer = gl.GenBuffer()
 	octreeBuffer.Bind(gl.SHADER_STORAGE_BUFFER)
-	octreeBuffer.BindBufferRange(gl.SHADER_STORAGE_BUFFER, 0, 0, uint(len(octreeData) * 4))
-	gl.BufferData(gl.SHADER_STORAGE_BUFFER, len(octreeData) * 4, shaderOctreeData, gl.STATIC_DRAW)
-	octreeIndex := shader.GetProgramResourceIndex(gl.SHADER_STORAGE_BLOCK, "octree")
-	if octreeIndex == gl.INVALID_INDEX {
+	octreeBuffer.BindBufferRange(gl.SHADER_STORAGE_BUFFER, SSBO_BINDING, 0, uint(len(octreeData) * 4))
+	gl.BufferData(gl.SHADER_STORAGE_BUFFER, len(octreeData) * 4, octreeData, gl.DYNAMIC_DRAW)
+	octreeIndex = shader.GetProgramResourceIndex(gl.SHADER_STORAGE_BLOCK, "octree")
+	if octreeIndex != gl.NO_ERROR {
 		fmt.Println("Failed to allocate GPU buffer for octree data. Exiting.")
 		panic(1)
 	}
@@ -166,6 +167,13 @@ func main() {
 	plane := LoadModel("voxelRes/models/plane.obj")
 	
 	/* HANDLE OPENGL RENDERING */
+
+	gl.ActiveTexture(gl.TEXTURE0)
+	bricks.Bind(gl.TEXTURE_3D)
+	defer bricks.Unbind(gl.TEXTURE_3D)
+
+	octreeBuffer.Bind(gl.SHADER_STORAGE_BUFFER)
+	defer octreeBuffer.Unbind(gl.SHADER_STORAGE_BUFFER)
 
 	ticks := 2000
 	startTime := time.Now().UnixNano()
@@ -224,14 +232,8 @@ func main() {
 			cameraPosition = cameraPosition.Plus(forwardDirection.Times(-.5))
 		}
 
-
-		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
 		shader.GetUniformLocation("voxelBlocks").Uniform1i(0)
-		gl.ActiveTexture(gl.TEXTURE0)
-		bricks.Bind(gl.TEXTURE_3D)
 
-		shader.GetUniformLocation("lightPos").Uniform3f(3, 1, 3)
 		shader.GetUniformLocation("cameraPos").Uniform3f(cameraPosition.X, cameraPosition.Y, cameraPosition.Z);
 		shader.GetUniformLocation("cameraUp").Uniform3f(upDirection.X, upDirection.Y, upDirection.Z)
 		shader.GetUniformLocation("cameraRight").Uniform3f(rightDirection.X, rightDirection.Y, rightDirection.Z)
@@ -243,8 +245,6 @@ func main() {
 
 		camera.Prepare(shader, Scale(glam.Vec3{0,float32(WindowH) / float32(WindowW), 1}))
 		plane.Draw()
-
-		bricks.Unbind(gl.TEXTURE_3D)
 
 		sdl.GL_SwapBuffers()
 	}

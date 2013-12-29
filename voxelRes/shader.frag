@@ -20,7 +20,7 @@ struct octreeNode {
 	uint colorData;
 };
 
-layout(std430, binding = 0) buffer octree {
+layout(std430, binding = 1) buffer octree {
 	octreeNode nodes [];
 };
 
@@ -39,7 +39,6 @@ uniform vec3 cameraPos;
 uniform vec3 cameraUp;
 uniform vec3 cameraRight;
 uniform vec3 cameraForwards;
-uniform vec3 lightPos;
 uniform int widthPix, heightPix;
 
 in vec3 cameraDir;
@@ -53,59 +52,13 @@ ivec3 nodeBrick(uint node) {
 	return ivec3((loc >> 20) & COORD_MASK, (loc >> 10) & COORD_MASK, loc & COORD_MASK);
 }
 
-vec4 colorAtLoc(vec3 pos) {
-	uint node = uint(0);
-	vec3 scale = worldSize / 2;
-	int maxDepth = 5;
-	while ((nodes[node].childData & FINAL_MASK) == uint(0) && (maxDepth--) > 0) {
-		ivec3 childLoc = ivec3(pos / scale);
-		int childOffset = childLoc.x * 4 + childLoc.y * 2 + childLoc.z;
-		pos = pos - scale * childLoc;
-		node = (nodes[node].childData & CHILD_MASK) + uint(childOffset);
-		scale = scale / 2;
-	}
-	if ((nodes[node].childData & SOLID_MASK) != 0) {
-		return vec4(0, 0, 0, 0);
-	}
-	ivec3 nodeBrickLoc = nodeBrick(node);
-	nodeBrickLoc += ivec3(vec3(4, 4, 4) * pos / scale);
-	// return vec4(, 0, 0, 1);
-	// vec4 locColor = colorAtBrickLoc(nodeBrickLoc);
-	// return vec4(1.0 - float(10 - maxDepth) / 10.0 * (1.0 - locColor.r),
-	// 	locColor.g, locColor.b, locColor.a);
-	return colorAtBrickLoc(nodeBrickLoc);
-}
-
-vec4 colorAtIntegerLoc(ivec3 pos) {
-	uint node = uint(0);
-	int scale = worldVoxelSize >> 1;
-	while ((nodes[node].childData & FINAL_MASK) == uint(0)) {
-		ivec3 childLoc = pos / scale;
-		int childOffset = childLoc.x * 4 + childLoc.y * 2 + childLoc.z;
-		pos = pos - scale * childLoc;
-		node = (nodes[node].childData & CHILD_MASK) + uint(childOffset);
-		scale = scale >> 1;
-	}
-	if ((nodes[node].childData & SOLID_MASK) != 0) {
-		return vec4(0, 0, 0, 0);
-	}
-	ivec3 nodeBrickLoc = nodeBrick(node);
-	nodeBrickLoc += ivec3(vec3(4, 4, 4) * pos / scale);
-	return colorAtBrickLoc(nodeBrickLoc);
-}
-
 vec4 cAlong(vec3 start, vec3 dir) {
 	vec4 c = vec4(0, 0, 0, 0);
-	// return c;
 
 	// Search through the octree.
-
-	// octreeNodeParser nodeList[MAX_DEPTH];
 	dir = normalize(dir);
-
 	vec3 dInv = 1 / dir;
 
-	// int vMask = TO_BITS(dir.x <= 0, dir.y <= 0, dir.z <= 0);
 	ivec3 vMask = ivec3(INT(dir.x <= 0), INT(dir.y <= 0), INT(dir.z <= 0));
 
 	vec3 xMin = vec3(0, 0, 0);
@@ -138,14 +91,11 @@ vec4 cAlong(vec3 start, vec3 dir) {
 	int depth = 0;
 	int maxSteps = 200;
 	while (--maxSteps > 0) {
-		// if (nextNode < 0 || nextNode >= numNodes)
-		// 	return vec4(1, 0, 0, 1)
 		if ((nodes[nextNode].childData & FINAL_MASK) != 0) {
 			if ((nodes[nextNode].childData & SOLID_MASK) == 0) {
 				/*
 				 * Look at a leaf node.
 				 */
-				// return vec4(pos, 1);
 				c += vec4(1, 1, 1, 1) * .1;// * float(maxSteps) / 100.0;
 				if (c.a >= 1)
 					return c;
@@ -205,5 +155,4 @@ void main(){
 	float yDisp = (gl_FragCoord.y - float(heightPix) / 2) / heightPix;
 	vec3 cDir = cameraForwards + xDisp * cameraRight - yDisp * cameraUp;
 	color = cAlong(cameraPos, cDir).rgb;
-	vec3 colorThere = colorAtLoc(vec3(1, 1, 1)).rgb;	// TO PREVENT STARTUP ERROR (FOR NOW)
 }
