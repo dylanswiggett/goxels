@@ -96,7 +96,9 @@ vec4 cAlong(vec3 start, vec3 dir) {
 				/*
 				 * Look at a leaf node.
 				 */
-				c += vec4(1, 1, 1, 1) * .1;// * float(maxSteps) / 100.0;
+
+				c += vec4(nextXMin / 10.0, 0) * (1.0 - c.a);// * float(maxSteps) / 100.0;
+				c.a += .2;
 				if (c.a >= 1)
 					return c;
 			}
@@ -154,5 +156,6 @@ void main(){
 	float xDisp = (gl_FragCoord.x - float(widthPix) / 2) / widthPix;
 	float yDisp = (gl_FragCoord.y - float(heightPix) / 2) / heightPix;
 	vec3 cDir = cameraForwards + xDisp * cameraRight - yDisp * cameraUp;
-	color = cAlong(cameraPos, cDir).rgb;
+	vec4 actualColor = cAlong(cameraPos, cDir);
+	color = actualColor.rgb * actualColor.a;
 }
