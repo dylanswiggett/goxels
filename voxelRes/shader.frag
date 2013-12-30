@@ -109,14 +109,17 @@ vec4 cAlong(vec3 start, vec3 dir) {
 				vec3 fLinePos = pos * 8 / dim;
 				ivec3 linePos = ivec3(fLinePos);
 				vec3 stepTmax = (vec3(linePos + stepDir) - fLinePos) * dInv;
-				int max = 20;
 
 				ivec3 brickLoc = nodeBrick(nextNode);
 
-				while (max-- > 0) {
+				while (true) {
 					vec4 checkColor = colorAtBrickLoc(brickLoc + linePos);
-					if (checkColor != vec4(0, 0, 0, 0))
-						return checkColor;
+					if (checkColor.a != 0) {
+						c += vec4(checkColor.rgb, 0) * (1.0 - c.a);
+						c.a += checkColor.a;
+						if (c.a >= 1)
+							return c;
+					}
 					if (stepTmax.x < stepTmax.y && stepTmax.x < stepTmax.z) {
 							linePos.x += stepDir.x;
 							if (linePos.x < 0 || linePos.x >= 8)
@@ -134,11 +137,6 @@ vec4 cAlong(vec3 start, vec3 dir) {
 							stepTmax.z += deltaT.z;
 					}
 				}
-
-				// c += vec4(nextXMin / 10.0, 0) * (1.0 - c.a);// * float(maxSteps) / 100.0;
-				// c.a += .2;
-				if (c.a >= 1)
-					return c;
 			}
 			/*
 			 * Prepare for next node to check.

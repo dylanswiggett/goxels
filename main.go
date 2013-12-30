@@ -46,14 +46,14 @@ func main() {
 	fmt.Println("Generating simple test octree...")
 	tree := NewOctree(V3(0, 0, 0), V3(10, 10, 10), 5)
 	data := 0
-	for x := float32(0); x <= 10.0; x += .005 {
-		for y := float32(0); y <= 10.0; y+= .005 {
-			// for z := float32(0); float64(z) < math.Sin(float64(x)) + 2.0 && x + z <= 10.0; z+= 0.1 {
+	for x := float32(0); x < 10.0; x += .02 {
+		for y := float32(0); y < 10.0; y+= .02 {
+			// for z := float32(0); float64(z) < math.Sin(float64(x)) + 2.0 && x + z < 10.0; z+= 0.1 {
 			// 	data++
-			// 	testVoxel := NewVoxel(0, float32(int(x * 1000) % 100) / 100.0, 0, 1, V3(1, 0, 0))
+			// 	testVoxel := NewVoxel(0, float32(int(x * 1000) % 100) / 100.0, 0, .2, V3(1, 0, 0))
 			// 	tree.AddVoxel(&testVoxel, V3(x, y, x + z))
 			// }
-			testVoxel := NewVoxel(x / 10.0, y / 10.0, 0, 1, V3(1, 0, 0))
+			testVoxel := NewVoxel(x / 10.0, y / 10.0, 0, x / 20.0, V3(1, 0, 0))
 			tree.AddVoxel(&testVoxel, V3(x, y, float32(math.Sqrt(math.Pow(float64(x - 5.0), 2) + math.Pow(float64(y - 5.0), 2)))))
 			data++
 		}
