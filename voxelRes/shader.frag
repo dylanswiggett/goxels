@@ -73,6 +73,8 @@ vec4 cAlong(vec3 start, vec3 dir) {
 	float sLMax = MAX_COMP(lowerLimits);
 	float sUMin = MIN_COMP(upperLimits);
 
+	// if (sLMax >= sUMin)
+		// return vec4(0, 0, (sLMax - sUMin) / 100, 1);
 	if (sLMax >= sUMin || sUMin < 0)
 		return vec4(0, 0, 0, 1);
 
@@ -83,6 +85,10 @@ vec4 cAlong(vec3 start, vec3 dir) {
 	vec3 pos = start + dir * (sLMax + .001);
 	vec3 dim = xMax;
 
+	float dispPerUnit = length(dir);
+
+	float dist = sLMax * dispPerUnit;
+
 	ivec3 subNodeLoc;
 
 	vec3 nextXMin = xMin;
@@ -91,9 +97,11 @@ vec4 cAlong(vec3 start, vec3 dir) {
 	uint node = 0;
 	uint nextNode = node;
 	int depth = 0;
+
 	int maxSteps = 200;
 	while (--maxSteps > 0) {
-		if ((nodes[nextNode].childData & FINAL_MASK) != 0) {
+		dist = sLMax * dispPerUnit;
+		if ((nodes[nextNode].childData & FINAL_MASK) != 0 || depth > 10) {
 			vec3 nextXMax = nextXMin + dim;
 			sMin = (nextXMin - start) * dInv;
 			sMax = (nextXMax - start) * dInv;
